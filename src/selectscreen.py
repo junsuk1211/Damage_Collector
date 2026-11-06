@@ -29,7 +29,9 @@ class SelectScreen:
 
     def __init__(self, width, height):
         self.width, self.height = width, height
-        self.left = width // 2 - 150
+        self.left = 72
+        cover_path = Path(__file__).resolve().parents[1] / 'assets/backgrounds/title-cover.png'
+        self.cover = p.load_image(str(cover_path))
         self.title_font = korean_font(46)
         self.font = korean_font(26)
 
@@ -42,9 +44,16 @@ class SelectScreen:
         return None
 
     def draw(self):
-        fill(self.left - 65, 147, 430, 416, (19, 25, 42))
-        self.title_font.draw(self.left - 45, 502, 'Damage Collector', (255, 218, 144))
+        white = (255, 255, 255)
+        gold = (255, 210, 112)
+        self.cover.draw(self.width / 2, self.height / 2, self.width, self.height)
+        fill(0, 0, self.width, 2, white)
+        fill(0, self.height - 2, self.width, 2, white)
+        fill(0, 0, 2, self.height, white)
+        fill(self.width - 2, 0, 2, self.height, white)
+        self.title_font.draw(self.left, 539, '데미지 콜렉터', gold)
+        self.font.draw(self.left + 2, 480, 'DAMAGE COLLECTOR', gold)
         for _, label, bottom in self.BUTTONS:
-            fill(self.left, bottom, 300, 58, (195, 152, 82))
-            fill(self.left + 2, bottom + 2, 296, 54, (39, 50, 74))
-            self.font.draw(self.left + (110 if label == '설명' else 98), bottom + 29, label, (251, 238, 210))
+            fill(self.left, bottom, 300, 58, white)
+            fill(self.left + 2, bottom + 2, 296, 54, (18, 25, 41))
+            self.font.draw(self.left + (124 if label == '설명' else 111), bottom + 29, label, gold)

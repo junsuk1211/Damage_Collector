@@ -28,7 +28,7 @@ def main(frame_limit=None):
         player = Player()
         player.load_image()
         menu = SelectScreen(WIDTH, HEIGHT)
-        training = TrainingCenter()
+        training = TrainingCenter(WIDTH)
         screen = 'menu'
         previous = perf_counter()
         running, frames = True, 0
@@ -55,7 +55,8 @@ def main(frame_limit=None):
                         if screen == 'training':
                             training.reset()
                 elif screen in ('chapter1', 'training'):
-                    player.handle_event(event)
+                    if screen != 'training' or training.can_start_action(event, player):
+                        player.handle_event(event)
                     if screen == 'training':
                         training.handle_event(event, player)
             # 다른 창으로 전환할 때 키 해제 이벤트를 놓쳐도 계속 걷지 않는다.
@@ -65,17 +66,19 @@ def main(frame_limit=None):
                 break
             if screen in ('chapter1', 'training'):
                 previous_attack_time = player.attack_time
+                previous_action_time = player.action_time
                 player.update(dt, WIDTH)
                 if screen == 'training':
-                    training.update(dt, player, previous_attack_time)
+                    training.update(dt, player, previous_attack_time, previous_action_time)
             pico2d.clear_canvas()
-            background.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
             if screen == 'menu':
                 menu.draw()
-            elif screen == 'instructions':
+            else:
+                background.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
+            if screen == 'instructions':
                 fill(320, 145, 640, 430, (19, 25, 42))
                 menu.font.draw(350, 535, '설명', (255, 230, 177))
-            else:
+            elif screen in ('chapter1', 'training'):
                 if screen == 'training':
                     training.draw_dummy()
                 player.draw()
