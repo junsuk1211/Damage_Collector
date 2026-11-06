@@ -123,6 +123,14 @@ class Player:
             self.height * cell_width / cell_height, self.height,
         )
 
+    @property
+    def jump_lift(self):
+        if self.jump_time is None:
+            return 0.0
+        takeoff, _, landing, _ = JUMP_FRAME_ENDS
+        progress = min(1.0, max(0.0, (self.jump_time - takeoff) / (landing - takeoff)))
+        return 4 * JUMP_HEIGHT * progress * (1 - progress)
+
     def draw(self):
         if self.image is None:
             raise RuntimeError('캔버스를 연 뒤 load_image()를 먼저 호출하세요.')
@@ -136,10 +144,7 @@ class Player:
             return
         if self.jump_time is not None:
             frame = bisect_right(JUMP_FRAME_ENDS, self.jump_time)
-            takeoff, _, landing, _ = JUMP_FRAME_ENDS
-            progress = min(1.0, max(0.0, (self.jump_time - takeoff) / (landing - takeoff)))
-            lift = 4 * JUMP_HEIGHT * progress * (1 - progress)
-            self.draw_motion(frame, row=0, ability=True, lift=lift)
+            self.draw_motion(frame, row=0, ability=True, lift=self.jump_lift)
             return
         if self.walk_time:
             self.draw_motion(int(self.walk_time / WALK_FRAME_TIME) % 4, row=0)

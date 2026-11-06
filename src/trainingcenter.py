@@ -230,7 +230,7 @@ class TrainingCenter:
             fill(x - 28, y + 109, 56 * dummy.hp / 10, 6,
                  (255, 233, 165) if dummy.flash else (240, 105, 80))
 
-    def draw_banner(self, width, height, player):
+    def draw_number_effects(self, player):
         for drop in self.drops:
             self.font.draw(drop.display_x - 6, drop.display_y, str(drop.value), (120, 238, 255))
         if self.pickup is not None:
@@ -255,6 +255,9 @@ class TrainingCenter:
                 x, y = arc.point(dot / 24)
                 fill(x - 2, y - 2, 4, 4, (145, 242, 255))
             fill(arc.landing_x - 13, arc.ground_y - 2, 26, 4, (255, 217, 125))
+
+    def draw_banner(self, width, height, player):
+        self.draw_number_effects(player)
         fill(0, height - 82, width, 82, (19, 25, 42))
         self.font.draw(24, height - 22, '훈련장  |  I키를 누를 시 허수아비 더미를 생성합니다  |  Esc 시작 화면으로', (255, 230, 177))
         held = ' + '.join(str(value) for value, _ in self.stored) or '없음'

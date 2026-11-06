@@ -12,11 +12,13 @@ try:
     from .selectscreen import SelectScreen
     from .instructions import InstructionBook
     from .trainingcenter import TrainingCenter
+    from .chapter1 import ChapterOne
 except ImportError:
     from player import Player
     from selectscreen import SelectScreen
     from instructions import InstructionBook
     from trainingcenter import TrainingCenter
+    from chapter1 import ChapterOne
 
 
 WIDTH, HEIGHT = 1280, 720
@@ -34,6 +36,8 @@ def main(frame_limit=None):
         player.load_image()
         menu = SelectScreen(WIDTH, HEIGHT)
         training = TrainingCenter(WIDTH)
+        chapter = ChapterOne(WIDTH)
+        rooms = {'training': training, 'chapter1': chapter}
         screen = 'menu'
         previous = perf_counter()
         running, frames = True, 0
@@ -57,40 +61,37 @@ def main(frame_limit=None):
                         if screen in ('chapter1', 'training'):
                             player = Player(ground_y=TRAINING_GROUND_Y) if screen == 'training' else Player()
                             player.load_image()
-                        if screen == 'training':
-                            training.reset()
-                elif screen in ('chapter1', 'training'):
-                    if screen != 'training' or training.can_start_action(event, player):
+                            rooms[screen].reset()
+                elif screen in rooms and (screen != 'chapter1' or chapter.health):
+                    room = rooms[screen]
+                    if room.can_start_action(event, player):
                         player.handle_event(event)
-                    if screen == 'training':
-                        training.handle_event(event, player)
+                    room.handle_event(event, player)
             # 다른 창으로 전환할 때 키 해제 이벤트를 놓쳐도 계속 걷지 않는다.
             if not SDL_GetKeyboardFocus():
                 player.clear_input()
-                training.cancel_aim()
+                if screen in rooms:
+                    rooms[screen].cancel_aim()
             if not running:
                 break
-            if screen in ('chapter1', 'training'):
+            if screen in rooms and (screen != 'chapter1' or chapter.health):
                 previous_attack_time = player.attack_time
                 previous_action_time = player.action_time
                 player.update(dt, WIDTH)
-                if screen == 'training':
-                    training.update(dt, player, previous_attack_time, previous_action_time)
+                rooms[screen].update(dt, player, previous_attack_time, previous_action_time)
             pico2d.clear_canvas()
             if screen == 'menu':
                 menu.draw()
             elif screen == 'instructions':
                 book.draw(WIDTH, HEIGHT)
-            elif screen in ('chapter1', 'training'):
+            elif screen in rooms:
                 scene = mountains if screen == 'training' else background
                 scene.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
-                if screen == 'training':
-                    training.draw_dummy()
-                player.draw()
-                if screen == 'training':
-                    training.draw_banner(WIDTH, HEIGHT, player)
-                else:
-                    menu.font.draw(24, HEIGHT - 28, '챕터 1', (255, 230, 177))
+                room = rooms[screen]
+                room.draw_dummy()
+                if screen != 'chapter1' or not chapter.health or int(chapter.hurt_time * 16) % 2 == 0:
+                    player.draw()
+                room.draw_banner(WIDTH, HEIGHT, player)
             pico2d.update_canvas()
             pico2d.delay(0.001)
             frames += 1
