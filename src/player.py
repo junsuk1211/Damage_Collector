@@ -51,7 +51,7 @@ class Player:
                 if event.key == pico2d.SDLK_x:
                     self.attack_time = 0.0
                     self.walk_time = 0.0
-                elif event.key == pico2d.SDLK_SPACE:
+                elif event.key == pico2d.SDLK_UP:
                     self.jump_time = 0.0
                     self.walk_time = 0.0
                 elif event.key in GROUND_ACTIONS:
