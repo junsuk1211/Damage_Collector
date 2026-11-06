@@ -12,6 +12,9 @@ ATTACK_FRAME_ENDS = (0.10, 0.18, 0.28, 0.40)
 ABILITY_PATH = ASSET_PATH.with_name('player-abilities.png')
 JUMP_FRAME_ENDS = (0.08, 0.34, 0.60, 0.70)
 JUMP_HEIGHT = 112
+GROUND_ACTIONS = {
+    pico2d.SDLK_c: (1, (0.09, 0.22, 0.34, 0.46)),
+}
 
 
 class Player:
@@ -27,6 +30,8 @@ class Player:
         self.walk_time = 0.0
         self.attack_time = None
         self.jump_time = None
+        self.ground_action = None
+        self.action_time = 0.0
         self.width = float(height)
 
     def load_image(self):
@@ -39,12 +44,16 @@ class Player:
         if event.type == pico2d.SDL_KEYDOWN:
             if event.key in (pico2d.SDLK_LEFT, pico2d.SDLK_RIGHT):
                 self._pressed.add(event.key)
-            elif self.attack_time is None and self.jump_time is None:
+            elif self.attack_time is None and self.jump_time is None and self.ground_action is None:
                 if event.key == pico2d.SDLK_x:
                     self.attack_time = 0.0
                     self.walk_time = 0.0
                 elif event.key == pico2d.SDLK_SPACE:
                     self.jump_time = 0.0
+                    self.walk_time = 0.0
+                elif event.key in GROUND_ACTIONS:
+                    self.ground_action = GROUND_ACTIONS[event.key]
+                    self.action_time = 0.0
                     self.walk_time = 0.0
         elif event.type == pico2d.SDL_KEYUP:
             self._pressed.discard(event.key)
@@ -54,6 +63,12 @@ class Player:
 
     def update(self, dt, world_width):
         dt = max(0.0, dt)
+        if self.ground_action is not None:
+            _, ends = self.ground_action
+            self.action_time += dt
+            if self.action_time >= ends[-1]:
+                self.ground_action = None
+            return
         if self.attack_time is not None:
             self.attack_time += dt
             if self.attack_time >= ATTACK_FRAME_ENDS[-1]:
@@ -90,6 +105,10 @@ class Player:
     def draw(self):
         if self.image is None:
             raise RuntimeError('캔버스를 연 뒤 load_image()를 먼저 호출하세요.')
+        if self.ground_action is not None:
+            row, ends = self.ground_action
+            self.draw_motion(bisect_right(ends, self.action_time), row, ability=True)
+            return
         if self.attack_time is not None:
             self.draw_motion(bisect_right(ATTACK_FRAME_ENDS, self.attack_time), row=1)
             return
