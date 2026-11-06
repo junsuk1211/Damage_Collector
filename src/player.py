@@ -14,6 +14,7 @@ JUMP_FRAME_ENDS = (0.08, 0.34, 0.60, 0.70)
 JUMP_HEIGHT = 112
 GROUND_ACTIONS = {
     pico2d.SDLK_c: (1, (0.09, 0.22, 0.34, 0.46)),
+    pico2d.SDLK_v: (2, (0.12, 0.19, 0.28, 0.42)),
 }
 
 
