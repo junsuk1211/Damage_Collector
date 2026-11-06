@@ -9,6 +9,9 @@ import pico2d
 ASSET_PATH = Path(__file__).resolve().parents[1] / 'assets' / 'characters' / 'player-motion.png'
 WALK_FRAME_TIME = 0.085
 ATTACK_FRAME_ENDS = (0.10, 0.18, 0.28, 0.40)
+ABILITY_PATH = ASSET_PATH.with_name('player-abilities.png')
+JUMP_FRAME_ENDS = (0.08, 0.34, 0.60, 0.70)
+JUMP_HEIGHT = 112
 
 
 class Player:
@@ -20,22 +23,29 @@ class Player:
         self.facing = 1
         self._pressed = set()
         self.image = None
+        self.abilities = None
         self.walk_time = 0.0
         self.attack_time = None
+        self.jump_time = None
         self.width = float(height)
 
     def load_image(self):
         # 캔버스를 연 다음 호출한다.
         self.image = pico2d.load_image(str(ASSET_PATH))
+        self.abilities = pico2d.load_image(str(ABILITY_PATH))
         self.width = self.height * (self.image.w // 4) / (self.image.h // 2)
 
     def handle_event(self, event):
         if event.type == pico2d.SDL_KEYDOWN:
             if event.key in (pico2d.SDLK_LEFT, pico2d.SDLK_RIGHT):
                 self._pressed.add(event.key)
-            elif event.key == pico2d.SDLK_x and self.attack_time is None:
-                self.attack_time = 0.0
-                self.walk_time = 0.0
+            elif self.attack_time is None and self.jump_time is None:
+                if event.key == pico2d.SDLK_x:
+                    self.attack_time = 0.0
+                    self.walk_time = 0.0
+                elif event.key == pico2d.SDLK_SPACE:
+                    self.jump_time = 0.0
+                    self.walk_time = 0.0
         elif event.type == pico2d.SDL_KEYUP:
             self._pressed.discard(event.key)
 
@@ -49,6 +59,10 @@ class Player:
             if self.attack_time >= ATTACK_FRAME_ENDS[-1]:
                 self.attack_time = None
             return
+        if self.jump_time is not None:
+            self.jump_time += dt
+            if self.jump_time >= JUMP_FRAME_ENDS[-1]:
+                self.jump_time = None
         direction = int(pico2d.SDLK_RIGHT in self._pressed) - int(
             pico2d.SDLK_LEFT in self._pressed
         )
@@ -60,16 +74,17 @@ class Player:
         self.x = max(half_width, min(world_width - half_width, self.x))
         self.walk_time = self.walk_time + dt if self.x != previous_x else 0.0
 
-    def draw_motion(self, frame, row):
-        cell_width = self.image.w // 4
-        cell_height = self.image.h // 2
+    def draw_motion(self, frame, row, *, ability=False, lift=0):
+        image, rows = (self.abilities, 4) if ability else (self.image, 2)
+        cell_width = image.w // 4
+        cell_height = image.h // rows
         # 셀 아래의 투명 여백을 빼서 발을 바닥선에 맞춘다.
-        foot_padding = self.height * 0.095
-        self.image.clip_composite_draw(
-            frame * cell_width, (1 - row) * cell_height, cell_width, cell_height,
+        foot_padding = self.height * (0.13 if ability else 0.095)
+        image.clip_composite_draw(
+            frame * cell_width, (rows - 1 - row) * cell_height, cell_width, cell_height,
             0, 'h' if self.facing < 0 else '',
-            self.x, self.ground_y + self.height / 2 - foot_padding,
-            self.width, self.height,
+            self.x, self.ground_y + self.height / 2 - foot_padding + lift,
+            self.height * cell_width / cell_height, self.height,
         )
 
     def draw(self):
@@ -77,6 +92,13 @@ class Player:
             raise RuntimeError('캔버스를 연 뒤 load_image()를 먼저 호출하세요.')
         if self.attack_time is not None:
             self.draw_motion(bisect_right(ATTACK_FRAME_ENDS, self.attack_time), row=1)
+            return
+        if self.jump_time is not None:
+            frame = bisect_right(JUMP_FRAME_ENDS, self.jump_time)
+            takeoff, _, landing, _ = JUMP_FRAME_ENDS
+            progress = min(1.0, max(0.0, (self.jump_time - takeoff) / (landing - takeoff)))
+            lift = 4 * JUMP_HEIGHT * progress * (1 - progress)
+            self.draw_motion(frame, row=0, ability=True, lift=lift)
             return
         if self.walk_time:
             self.draw_motion(int(self.walk_time / WALK_FRAME_TIME) % 4, row=0)
