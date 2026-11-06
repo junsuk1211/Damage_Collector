@@ -15,7 +15,9 @@ JUMP_HEIGHT = 112
 GROUND_ACTIONS = {
     pico2d.SDLK_c: (1, (0.09, 0.22, 0.34, 0.46)),
     pico2d.SDLK_v: (2, (0.12, 0.19, 0.28, 0.42)),
+    pico2d.SDLK_LSHIFT: (3, (0.07, 0.16, 0.25, 0.36)),
 }
+DODGE_SPEED = 460
 
 
 class Player:
@@ -65,7 +67,9 @@ class Player:
     def update(self, dt, world_width):
         dt = max(0.0, dt)
         if self.ground_action is not None:
-            _, ends = self.ground_action
+            row, ends = self.ground_action
+            if row == 3:
+                self.move_horizontal(self.facing * DODGE_SPEED * min(dt, ends[-1] - self.action_time), world_width)
             self.action_time += dt
             if self.action_time >= ends[-1]:
                 self.ground_action = None
@@ -85,10 +89,12 @@ class Player:
         if direction:
             self.facing = direction
         previous_x = self.x
-        self.x += direction * self.speed * dt
-        half_width = min(self.width / 2, world_width / 2)
-        self.x = max(half_width, min(world_width - half_width, self.x))
+        self.move_horizontal(direction * self.speed * dt, world_width)
         self.walk_time = self.walk_time + dt if self.x != previous_x else 0.0
+
+    def move_horizontal(self, distance, world_width):
+        half_width = min(self.width / 2, world_width / 2)
+        self.x = max(half_width, min(world_width - half_width, self.x + distance))
 
     def draw_motion(self, frame, row, *, ability=False, lift=0):
         image, rows = (self.abilities, 4) if ability else (self.image, 2)
