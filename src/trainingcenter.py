@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from math import ceil, cos, sin, tau
 from pathlib import Path
-from random import randint
+from random import choice, randint
 
 import pico2d as p
 
@@ -26,11 +26,20 @@ class DroppedNumber:
     x: float
     y: float
     value: int
+    landing_x: float
     time_left: float = 2.0
 
     @property
+    def flight_progress(self):
+        return min(1.0, (2.0 - self.time_left) / 0.58)
+
+    @property
+    def display_x(self):
+        return self.x + (self.landing_x - self.x) * self.flight_progress
+
+    @property
     def display_y(self):
-        progress = min(1.0, (2.0 - self.time_left) / 0.58)
+        progress = self.flight_progress
         return self.y + 44 * (1 - progress) + 260 * progress * (1 - progress)
 
 
@@ -73,6 +82,7 @@ class TrainingCenter:
     MIN_THROW_RANGE = 95
     MAX_THROW_RANGE = 460
     FULL_CHARGE_TIME = 0.95
+    BLAST_RADIUS = 103
 
     def __init__(self, width):
         self.width = width
@@ -127,8 +137,8 @@ class TrainingCenter:
         return True
 
     def nearest_drop(self, player):
-        nearby = (drop for drop in self.drops if abs(drop.x - player.x) <= self.PICKUP_REACH)
-        return min(nearby, key=lambda drop: abs(drop.x - player.x), default=None)
+        nearby = (drop for drop in self.drops if abs(drop.display_x - player.x) <= self.PICKUP_REACH)
+        return min(nearby, key=lambda drop: abs(drop.display_x - player.x), default=None)
 
     def damage(self, dummy, amount):
         dummy.hp = max(0, dummy.hp - amount)
@@ -160,7 +170,10 @@ class TrainingCenter:
             if dummy is not None:
                 damage = randint(1, 3)
                 self.damage(dummy, damage)
-                self.drops.append(DroppedNumber(dummy.x, dummy.y + 16, damage))
+                landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
+                            if 12 <= dummy.x + offset <= self.width - 12]
+                landing_x = choice(landings) if landings else dummy.x
+                self.drops.append(DroppedNumber(dummy.x, dummy.y + 16, damage, landing_x))
 
         if player.ground_action is not None and previous_action_time < 0.19 <= player.action_time:
             row, _ = player.ground_action
@@ -192,14 +205,20 @@ class TrainingCenter:
             x, y = shot.arc.point(progress)
             for dummy in self.dummies:
                 if dummy.hp > 0 and abs(x - dummy.x) <= 22 and dummy.y + 8 <= y <= dummy.y + 88:
-                    self.damage(dummy, shot.value)
-                    self.bursts.append(Burst(x, y, shot.value))
+                    self.explode(x, y, shot.value)
                     return False
         shot.progress = end
         if end == 1.0:
-            self.bursts.append(Burst(*shot.arc.point(end), shot.value))
+            self.explode(*shot.arc.point(end), shot.value)
             return False
         return True
+
+    def explode(self, x, y, value):
+        self.bursts.append(Burst(x, y, value))
+        for dummy in self.dummies:
+            distance_squared = (dummy.x - x) ** 2 + (dummy.y + 54 - y) ** 2
+            if dummy.hp > 0 and distance_squared <= self.BLAST_RADIUS ** 2:
+                self.damage(dummy, value)
 
     def draw_dummy(self):
         for dummy in self.dummies:
@@ -213,11 +232,11 @@ class TrainingCenter:
 
     def draw_banner(self, width, height, player):
         for drop in self.drops:
-            self.font.draw(drop.x - 6, drop.display_y, str(drop.value), (120, 238, 255))
+            self.font.draw(drop.display_x - 6, drop.display_y, str(drop.value), (120, 238, 255))
         if self.pickup is not None:
             drop = self.pickup
             progress = min(1.0, (player.action_time - 0.19) / 0.15)
-            x = drop.x + (player.x + 25 * player.facing - drop.x) * progress
+            x = drop.display_x + (player.x + 25 * player.facing - drop.display_x) * progress
             y = drop.display_y + (player.ground_y + 61 - drop.display_y) * progress
             y += 4 * (drop.value - 1) * 7 * progress * (1 - progress)
             color = ((120, 238, 255), (160, 255, 181), (255, 219, 116))[drop.value - 1]
@@ -244,7 +263,7 @@ class TrainingCenter:
 
     def draw_burst(self, burst):
         progress = burst.age / 0.60
-        radius = 8 + 95 * (1 - (1 - progress) ** 2)
+        radius = 8 + (self.BLAST_RADIUS - 8) * (1 - (1 - progress) ** 2)
         fade = 1 - progress
         if progress < 0.30:
             size = 20 * (1 - progress / 0.30)
