@@ -8,7 +8,7 @@ except ImportError:
     from selectscreen import korean_font
 
 
-class InstructionBook:
+class Manual:
     def __init__(self, background_path):
         self.background = pico2d.load_image(str(background_path))
         self.heading = korean_font(27)

@@ -10,15 +10,17 @@ from sdl2 import SDL_GetKeyboardFocus
 try:
     from .player import Player
     from .selectscreen import SelectScreen
-    from .instructions import InstructionBook
+    from .manual import Manual
     from .trainingcenter import TrainingCenter
     from .chapter1 import ChapterOne
+    from .gameover import GameOverScreen
 except ImportError:
     from player import Player
     from selectscreen import SelectScreen
-    from instructions import InstructionBook
+    from manual import Manual
     from trainingcenter import TrainingCenter
     from chapter1 import ChapterOne
+    from gameover import GameOverScreen
 
 
 WIDTH, HEIGHT = 1280, 720
@@ -31,10 +33,12 @@ def main(frame_limit=None):
     try:
         background = pico2d.load_image(str(ROOT / 'assets/backgrounds/training-yard.png'))
         mountains = pico2d.load_image(str(ROOT / 'assets/backgrounds/mountain-training.png'))
-        book = InstructionBook(ROOT / 'assets/backgrounds/underground-library.png')
+        book = Manual(ROOT / 'assets/backgrounds/underground-library.png')
         player = Player()
         player.load_image()
         menu = SelectScreen(WIDTH, HEIGHT)
+        game_over = GameOverScreen(WIDTH, HEIGHT)
+        menus = {'menu': menu, 'gameover': game_over}
         training = TrainingCenter(WIDTH)
         chapter = ChapterOne(WIDTH)
         rooms = {'training': training, 'chapter1': chapter}
@@ -54,8 +58,8 @@ def main(frame_limit=None):
                     else:
                         screen = 'menu'
                         player.clear_input()
-                elif screen == 'menu':
-                    destination = menu.handle_event(event)
+                elif screen in menus:
+                    destination = menus[screen].handle_event(event)
                     if destination:
                         screen = destination
                         if screen in ('chapter1', 'training'):
@@ -79,9 +83,11 @@ def main(frame_limit=None):
                 previous_action_time = player.action_time
                 player.update(dt, WIDTH)
                 rooms[screen].update(dt, player, previous_attack_time, previous_action_time)
+                if screen == 'chapter1' and not chapter.health:
+                    screen = 'gameover'
             pico2d.clear_canvas()
-            if screen == 'menu':
-                menu.draw()
+            if screen in menus:
+                menus[screen].draw()
             elif screen == 'instructions':
                 book.draw(WIDTH, HEIGHT)
             elif screen in rooms:

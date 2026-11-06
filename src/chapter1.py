@@ -83,7 +83,6 @@ class ChapterOne(TrainingCenter):
             fill(310 + index * 26, height - 40, 20, 20, color)
         held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
         self.font.draw(465, height - 30, f'보관 {held}    Esc 시작 화면', (153, 227, 245))
-        if not self.health or not self.dummies:
+        if not self.dummies:
             fill(width // 2 - 170, height // 2 - 34, 340, 68, (19, 25, 42))
-            message = '쓰러졌다' if not self.health else '경비병을 쓰러뜨렸다'
-            self.font.draw(width // 2 - 130, height // 2, message + '   [Esc]', (255, 230, 177))
+            self.font.draw(width // 2 - 130, height // 2, '경비병을 쓰러뜨렸다   [Esc]', (255, 230, 177))
