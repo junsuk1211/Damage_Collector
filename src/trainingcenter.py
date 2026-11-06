@@ -247,7 +247,7 @@ class TrainingCenter:
             self.draw_burst(burst)
         for shot in self.projectiles:
             x, y = shot.arc.point(shot.progress)
-            fill(x - 15, y - 13, 30, 26, (25, 89, 117))
+            self.font.draw(x - 6, y - 1, str(shot.value), (15, 55, 75))
             self.font.draw(x - 7, y, str(shot.value), (196, 250, 255))
         if self.aim_time is not None:
             arc = self.aim_arc(player)

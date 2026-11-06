@@ -9,15 +9,18 @@ from sdl2 import SDL_GetKeyboardFocus
 
 try:
     from .player import Player
-    from .selectscreen import SelectScreen, fill
+    from .selectscreen import SelectScreen
+    from .instructions import InstructionBook
     from .trainingcenter import TrainingCenter
 except ImportError:
     from player import Player
-    from selectscreen import SelectScreen, fill
+    from selectscreen import SelectScreen
+    from instructions import InstructionBook
     from trainingcenter import TrainingCenter
 
 
 WIDTH, HEIGHT = 1280, 720
+TRAINING_GROUND_Y = 170
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -25,6 +28,8 @@ def main(frame_limit=None):
     pico2d.open_canvas(WIDTH, HEIGHT)
     try:
         background = pico2d.load_image(str(ROOT / 'assets/backgrounds/training-yard.png'))
+        mountains = pico2d.load_image(str(ROOT / 'assets/backgrounds/mountain-training.png'))
+        book = InstructionBook(ROOT / 'assets/backgrounds/underground-library.png')
         player = Player()
         player.load_image()
         menu = SelectScreen(WIDTH, HEIGHT)
@@ -50,7 +55,7 @@ def main(frame_limit=None):
                     if destination:
                         screen = destination
                         if screen in ('chapter1', 'training'):
-                            player = Player()
+                            player = Player(ground_y=TRAINING_GROUND_Y) if screen == 'training' else Player()
                             player.load_image()
                         if screen == 'training':
                             training.reset()
@@ -74,12 +79,11 @@ def main(frame_limit=None):
             pico2d.clear_canvas()
             if screen == 'menu':
                 menu.draw()
-            else:
-                background.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
-            if screen == 'instructions':
-                fill(320, 145, 640, 430, (19, 25, 42))
-                menu.font.draw(350, 535, '설명', (255, 230, 177))
+            elif screen == 'instructions':
+                book.draw(WIDTH, HEIGHT)
             elif screen in ('chapter1', 'training'):
+                scene = mountains if screen == 'training' else background
+                scene.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
                 if screen == 'training':
                     training.draw_dummy()
                 player.draw()
