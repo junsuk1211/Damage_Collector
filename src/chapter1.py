@@ -1,57 +1,17 @@
 """챕터 1 경비병의 이동과 전투."""
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import pico2d as p
 
 try:
     from .selectscreen import fill
-    from .trainingcenter import Dummy, TrainingCenter
+    from .trainingcenter import TrainingCenter
+    from .shieldman import Shieldman
 except ImportError:
     from selectscreen import fill
-    from trainingcenter import Dummy, TrainingCenter
-
-
-@dataclass
-class Guard(Dummy):
-    hp: int = 12
-    facing: int = -1
-    walk_time: float = 0.0
-    attack_age: float | None = None
-    cooldown: float = 0.0
-
-    def advance(self, dt, player):
-        self.cooldown = max(0.0, self.cooldown - dt)
-        if self.flash > 0:
-            return False
-        if self.attack_age is not None:
-            before = self.attack_age
-            self.attack_age += dt
-            if self.attack_age >= 0.72:
-                self.attack_age = None
-                self.cooldown = 0.65
-                return False
-            return before < 0.38 <= self.attack_age
-        offset = player.x - self.x
-        self.facing = -1 if offset < 0 else 1
-        if abs(offset) > 62:
-            self.x += self.facing * min(108 * dt, abs(offset) - 62)
-            self.walk_time += dt
-        else:
-            self.walk_time = 0.0
-            if not self.cooldown:
-                self.attack_age = 0.0
-        return False
-
-    def sprite_cell(self):
-        if self.flash > 0:
-            return 3, 1
-        if self.attack_age is not None:
-            return (0 if self.attack_age < 0.38 else 1 if self.attack_age < 0.49 else 2), 1
-        if self.walk_time:
-            return 1 + int(self.walk_time / 0.12) % 3, 0
-        return 0, 0
+    from trainingcenter import TrainingCenter
+    from shieldman import Shieldman
 
 
 class ChapterOne(TrainingCenter):
@@ -64,7 +24,7 @@ class ChapterOne(TrainingCenter):
 
     def reset(self):
         super().reset()
-        self.dummies = [Guard(735, 144)]
+        self.dummies = [Shieldman(735, 144)]
         self.health = self.MAX_HEALTH
         self.hurt_time = 0.0
 
