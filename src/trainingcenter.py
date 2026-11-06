@@ -256,7 +256,7 @@ class TrainingCenter:
                 fill(x - 2, y - 2, 4, 4, (145, 242, 255))
             fill(arc.landing_x - 13, arc.ground_y - 2, 26, 4, (255, 217, 125))
         fill(0, height - 82, width, 82, (19, 25, 42))
-        self.font.draw(24, height - 22, '훈련장  |  I키를 누를 시 허수아비 더미를 생성합니다', (255, 230, 177))
+        self.font.draw(24, height - 22, '훈련장  |  I키를 누를 시 허수아비 더미를 생성합니다  |  Esc 시작 화면으로', (255, 230, 177))
         held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
         cooldown = f'{self.cooldown:.1f}초' if self.cooldown else '준비'
         self.font.draw(24, height - 56, f'X 공격   C 회수   V 누르기 조준 / 놓기 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
