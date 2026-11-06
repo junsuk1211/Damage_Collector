@@ -1,4 +1,4 @@
-"""방향키로 주인공의 크기와 이동을 확인하는 실행 화면."""
+"""시작 메뉴와 게임 화면을 전환한다."""
 
 import argparse
 from pathlib import Path
@@ -9,8 +9,12 @@ from sdl2 import SDL_GetKeyboardFocus
 
 try:
     from .player import Player
+    from .selectscreen import SelectScreen, fill
+    from .trainingcenter import TrainingCenter
 except ImportError:
     from player import Player
+    from selectscreen import SelectScreen, fill
+    from trainingcenter import TrainingCenter
 
 
 WIDTH, HEIGHT = 1280, 720
@@ -23,6 +27,9 @@ def main(frame_limit=None):
         background = pico2d.load_image(str(ROOT / 'assets/backgrounds/training-yard.png'))
         player = Player()
         player.load_image()
+        menu = SelectScreen(WIDTH, HEIGHT)
+        training = TrainingCenter()
+        screen = 'menu'
         previous = perf_counter()
         running, frames = True, 0
         while running:
@@ -33,18 +40,49 @@ def main(frame_limit=None):
                 if event.type == pico2d.SDL_QUIT:
                     running = False
                 elif event.type == pico2d.SDL_KEYDOWN and event.key == pico2d.SDLK_ESCAPE:
-                    running = False
-                else:
+                    if screen == 'menu':
+                        running = False
+                    else:
+                        screen = 'menu'
+                        player.clear_input()
+                elif screen == 'menu':
+                    destination = menu.handle_event(event)
+                    if destination:
+                        screen = destination
+                        if screen in ('chapter1', 'training'):
+                            player = Player()
+                            player.load_image()
+                        if screen == 'training':
+                            training.reset()
+                elif screen in ('chapter1', 'training'):
                     player.handle_event(event)
+                    if screen == 'training':
+                        training.handle_event(event, player)
             # 다른 창으로 전환할 때 키 해제 이벤트를 놓쳐도 계속 걷지 않는다.
             if not SDL_GetKeyboardFocus():
                 player.clear_input()
             if not running:
                 break
-            player.update(dt, WIDTH)
+            if screen in ('chapter1', 'training'):
+                previous_attack_time = player.attack_time
+                player.update(dt, WIDTH)
+                if screen == 'training':
+                    training.update(dt, player, previous_attack_time)
             pico2d.clear_canvas()
             background.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
-            player.draw()
+            if screen == 'menu':
+                menu.draw()
+            elif screen == 'instructions':
+                fill(320, 145, 640, 430, (19, 25, 42))
+                menu.font.draw(350, 535, '설명', (255, 230, 177))
+            else:
+                if screen == 'training':
+                    training.draw_dummy()
+                player.draw()
+                if screen == 'training':
+                    training.draw_banner(WIDTH, HEIGHT)
+                else:
+                    menu.font.draw(24, HEIGHT - 28, '챕터 1', (255, 230, 177))
             pico2d.update_canvas()
             pico2d.delay(0.001)
             frames += 1
