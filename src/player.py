@@ -1,5 +1,6 @@
-"""주인공의 좌우 이동과 화면 표시."""
+"""주인공의 이동, 단검 공격 동작, 화면 표시."""
 
+from bisect import bisect_right
 from pathlib import Path
 
 import pico2d
@@ -7,6 +8,7 @@ import pico2d
 
 ASSET_PATH = Path(__file__).resolve().parents[1] / 'assets' / 'characters' / 'player-motion.png'
 WALK_FRAME_TIME = 0.085
+ATTACK_FRAME_ENDS = (0.10, 0.18, 0.28, 0.40)
 
 
 class Player:
@@ -19,6 +21,7 @@ class Player:
         self._pressed = set()
         self.image = None
         self.walk_time = 0.0
+        self.attack_time = None
         self.width = float(height)
 
     def load_image(self):
@@ -30,6 +33,9 @@ class Player:
         if event.type == pico2d.SDL_KEYDOWN:
             if event.key in (pico2d.SDLK_LEFT, pico2d.SDLK_RIGHT):
                 self._pressed.add(event.key)
+            elif event.key == pico2d.SDLK_x and self.attack_time is None:
+                self.attack_time = 0.0
+                self.walk_time = 0.0
         elif event.type == pico2d.SDL_KEYUP:
             self._pressed.discard(event.key)
 
@@ -38,6 +44,11 @@ class Player:
 
     def update(self, dt, world_width):
         dt = max(0.0, dt)
+        if self.attack_time is not None:
+            self.attack_time += dt
+            if self.attack_time >= ATTACK_FRAME_ENDS[-1]:
+                self.attack_time = None
+            return
         direction = int(pico2d.SDLK_RIGHT in self._pressed) - int(
             pico2d.SDLK_LEFT in self._pressed
         )
@@ -64,6 +75,9 @@ class Player:
     def draw(self):
         if self.image is None:
             raise RuntimeError('캔버스를 연 뒤 load_image()를 먼저 호출하세요.')
+        if self.attack_time is not None:
+            self.draw_motion(bisect_right(ATTACK_FRAME_ENDS, self.attack_time), row=1)
+            return
         if self.walk_time:
             self.draw_motion(int(self.walk_time / WALK_FRAME_TIME) % 4, row=0)
             return
