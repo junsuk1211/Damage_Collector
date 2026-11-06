@@ -83,7 +83,7 @@ def main(frame_limit=None):
                     training.draw_dummy()
                 player.draw()
                 if screen == 'training':
-                    training.draw_banner(WIDTH, HEIGHT)
+                    training.draw_banner(WIDTH, HEIGHT, player)
                 else:
                     menu.font.draw(24, HEIGHT - 28, '챕터 1', (255, 230, 177))
             pico2d.update_canvas()

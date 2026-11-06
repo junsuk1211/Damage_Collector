@@ -10,6 +10,7 @@ ASSET_PATH = Path(__file__).resolve().parents[1] / 'assets' / 'characters' / 'pl
 WALK_FRAME_TIME = 0.085
 ATTACK_FRAME_ENDS = (0.10, 0.18, 0.28, 0.40)
 ABILITY_PATH = ASSET_PATH.with_name('player-abilities.png')
+NUMBER_MOTION_PATH = ASSET_PATH.with_name('number-motion.png')
 JUMP_FRAME_ENDS = (0.08, 0.34, 0.60, 0.70)
 JUMP_HEIGHT = 112
 GROUND_ACTIONS = {
@@ -30,6 +31,7 @@ class Player:
         self._pressed = set()
         self.image = None
         self.abilities = None
+        self.number_motion = None
         self.walk_time = 0.0
         self.attack_time = None
         self.jump_time = None
@@ -41,6 +43,7 @@ class Player:
         # 캔버스를 연 다음 호출한다.
         self.image = pico2d.load_image(str(ASSET_PATH))
         self.abilities = pico2d.load_image(str(ABILITY_PATH))
+        self.number_motion = pico2d.load_image(str(NUMBER_MOTION_PATH))
         self.width = self.height * (self.image.w // 4) / (self.image.h // 2)
 
     def handle_event(self, event):
@@ -96,12 +99,17 @@ class Player:
         half_width = min(self.width / 2, world_width / 2)
         self.x = max(half_width, min(world_width - half_width, self.x + distance))
 
-    def draw_motion(self, frame, row, *, ability=False, lift=0):
+    def draw_motion(self, frame, row, *, ability=False, lift=0, number_motion=False):
         image, rows = (self.abilities, 4) if ability else (self.image, 2)
+        if number_motion:
+            image = self.number_motion
+            row -= 1
         cell_width = image.w // 4
         cell_height = image.h // rows
         # 셀 아래의 투명 여백을 빼서 발을 바닥선에 맞춘다.
         foot_padding = self.height * (0.13 if ability else 0.095)
+        if number_motion:
+            foot_padding = self.height * 0.055
         image.clip_composite_draw(
             frame * cell_width, (rows - 1 - row) * cell_height, cell_width, cell_height,
             0, 'h' if self.facing < 0 else '',
@@ -114,7 +122,8 @@ class Player:
             raise RuntimeError('캔버스를 연 뒤 load_image()를 먼저 호출하세요.')
         if self.ground_action is not None:
             row, ends = self.ground_action
-            self.draw_motion(bisect_right(ends, self.action_time), row, ability=True)
+            self.draw_motion(bisect_right(ends, self.action_time), row, ability=True,
+                             number_motion=row in (1, 2))
             return
         if self.attack_time is not None:
             self.draw_motion(bisect_right(ATTACK_FRAME_ENDS, self.attack_time), row=1)

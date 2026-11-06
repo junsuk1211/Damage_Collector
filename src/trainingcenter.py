@@ -1,6 +1,8 @@
 """허수아비와 숫자 회수·투척을 시험하는 훈련장."""
 
 from dataclasses import dataclass
+from math import cos, sin, tau
+from pathlib import Path
 from random import randint
 
 import pico2d as p
@@ -26,6 +28,11 @@ class DroppedNumber:
     value: int
     time_left: float = 2.0
 
+    @property
+    def display_y(self):
+        progress = min(1.0, (2.0 - self.time_left) / 0.58)
+        return self.y + 44 * (1 - progress) + 260 * progress * (1 - progress)
+
 
 @dataclass
 class Projectile:
@@ -33,6 +40,14 @@ class Projectile:
     y: float
     direction: int
     value: int
+
+
+@dataclass
+class Burst:
+    x: float
+    y: float
+    value: int
+    age: float = 0.0
 
 
 class TrainingCenter:
@@ -46,6 +61,9 @@ class TrainingCenter:
     def __init__(self, width):
         self.width = width
         self.font = korean_font(22)
+        self.spark_font = korean_font(16)
+        self.dummy_image = p.load_image(str(Path(__file__).resolve().parents[1]
+                                           / 'assets/characters/number-motion.png'))
         self.reset()
 
     def reset(self):
@@ -53,6 +71,8 @@ class TrainingCenter:
         self.drops = []
         self.stored = []
         self.projectiles = []
+        self.bursts = []
+        self.pickup = None
         self.cooldown = 0.0
 
     def handle_event(self, event, player):
@@ -77,6 +97,11 @@ class TrainingCenter:
         dummy.flash = 0.16
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
+        for burst in self.bursts:
+            burst.age += dt
+        self.bursts = [burst for burst in self.bursts if burst.age < 0.60]
+        if player.ground_action is None or player.ground_action[0] != 1:
+            self.pickup = None
         self.cooldown = max(0.0, self.cooldown - dt)
         self.stored = [(value, ttl - dt) for value, ttl in self.stored if ttl > dt]
         for drop in self.drops:
@@ -93,7 +118,7 @@ class TrainingCenter:
             if dummy is not None:
                 damage = randint(1, 3)
                 self.damage(dummy, damage)
-                self.drops.append(DroppedNumber(dummy.x, dummy.y + 22, damage))
+                self.drops.append(DroppedNumber(dummy.x, dummy.y + 16, damage))
 
         if player.ground_action is not None and previous_action_time < 0.19 <= player.action_time:
             row, _ = player.ground_action
@@ -102,6 +127,7 @@ class TrainingCenter:
                 if drop is not None:
                     self.drops.remove(drop)
                     self.stored.append((drop.value, self.HOLD_TIME))
+                    self.pickup = drop
             elif row == 2 and self.stored and self.cooldown <= 0:
                 total = sum(value for value, _ in self.stored)
                 self.projectiles.append(Projectile(player.x, player.ground_y + 54, player.facing, total))
@@ -118,6 +144,7 @@ class TrainingCenter:
             target = min(targets, key=lambda dummy: dummy.x * shot.direction, default=None)
             if target is not None:
                 self.damage(target, shot.value)
+                self.bursts.append(Burst(target.x, shot.y, shot.value))
             elif 0 <= next_x <= self.width:
                 shot.x = next_x
                 active.append(shot)
@@ -127,19 +154,28 @@ class TrainingCenter:
     def draw_dummy(self):
         for dummy in self.dummies:
             x, y = dummy.x, dummy.y
-            straw = (255, 225, 164) if dummy.flash else (213, 167, 81)
-            fill(x - 4, y, 8, 74, (109, 67, 43))
-            fill(x - 35, y + 48, 70, 8, (142, 93, 53))
-            fill(x - 19, y + 29, 38, 37, straw)
-            fill(x - 12, y + 65, 24, 23, straw)
-            fill(x - 18, y + 81, 36, 5, (83, 54, 44))
-            fill(x - 19, y + 41, 38, 4, (114, 71, 46))
-            fill(x - 28, y + 99, 56, 6, (77, 34, 41))
-            fill(x - 28, y + 99, 56 * dummy.hp / 10, 6, (240, 105, 80))
+            cell_width, cell_height = self.dummy_image.w // 4, self.dummy_image.h // 4
+            self.dummy_image.clip_draw(0, cell_height, cell_width, cell_height,
+                                       x, y + 54, 116, 116)
+            fill(x - 28, y + 109, 56, 6, (77, 34, 41))
+            fill(x - 28, y + 109, 56 * dummy.hp / 10, 6,
+                 (255, 233, 165) if dummy.flash else (240, 105, 80))
 
-    def draw_banner(self, width, height):
+    def draw_banner(self, width, height, player):
         for drop in self.drops:
-            self.font.draw(drop.x - 6, drop.y, str(drop.value), (120, 238, 255))
+            self.font.draw(drop.x - 6, drop.display_y, str(drop.value), (120, 238, 255))
+        if self.pickup is not None:
+            drop = self.pickup
+            progress = min(1.0, (player.action_time - 0.19) / 0.15)
+            x = drop.x + (player.x + 25 * player.facing - drop.x) * progress
+            y = drop.display_y + (player.ground_y + 61 - drop.display_y) * progress
+            y += 4 * (drop.value - 1) * 7 * progress * (1 - progress)
+            color = ((120, 238, 255), (160, 255, 181), (255, 219, 116))[drop.value - 1]
+            for index in range(1, drop.value):
+                fill(x - player.facing * index * 8, y - index * 5, 3, 3, color)
+            self.font.draw(x - 6, y, str(drop.value), color)
+        for burst in self.bursts:
+            self.draw_burst(burst)
         for shot in self.projectiles:
             fill(shot.x - 15, shot.y - 13, 30, 26, (25, 89, 117))
             self.font.draw(shot.x - 7, shot.y, str(shot.value), (196, 250, 255))
@@ -148,3 +184,21 @@ class TrainingCenter:
         held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
         cooldown = f'{self.cooldown:.1f}초' if self.cooldown else '준비'
         self.font.draw(24, height - 56, f'X 공격   C 회수   V 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
+
+    def draw_burst(self, burst):
+        progress = burst.age / 0.60
+        radius = 8 + 95 * (1 - (1 - progress) ** 2)
+        fade = 1 - progress
+        if progress < 0.30:
+            size = 20 * (1 - progress / 0.30)
+            fill(burst.x - size / 2, burst.y - size / 2, size, size, (228, 252, 255))
+        for index in range(10):
+            angle = tau * index / 10 + 0.12
+            spread = radius * (1.0 if index % 2 == 0 else 0.76)
+            dx, dy = cos(angle), sin(angle)
+            x = burst.x + dx * spread
+            y = burst.y + dy * spread - 27 * progress ** 2
+            color = (int(125 * fade), int(235 * fade), int(255 * fade))
+            for trail in (8, 15):
+                fill(x - dx * trail, y - dy * trail, 3, 3, color)
+            self.spark_font.draw(x - 5, y, str(burst.value), color)
