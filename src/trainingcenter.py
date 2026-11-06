@@ -1,7 +1,7 @@
 """허수아비와 숫자 회수·투척을 시험하는 훈련장."""
 
 from dataclasses import dataclass
-from math import cos, sin, tau
+from math import ceil, cos, sin, tau
 from pathlib import Path
 from random import randint
 
@@ -35,11 +35,25 @@ class DroppedNumber:
 
 
 @dataclass
-class Projectile:
+class ThrowArc:
     x: float
     y: float
-    direction: int
+    landing_x: float
+    ground_y: float
+
+    def point(self, progress):
+        distance = abs(self.landing_x - self.x)
+        lift = 55 + distance * 0.20
+        x = self.x + (self.landing_x - self.x) * progress
+        y = self.y + (self.ground_y - self.y) * progress + 4 * lift * progress * (1 - progress)
+        return x, y
+
+
+@dataclass
+class Projectile:
+    arc: ThrowArc
     value: int
+    progress: float = 0.0
 
 
 @dataclass
@@ -56,7 +70,9 @@ class TrainingCenter:
     CAPACITY = 3
     HOLD_TIME = 6.0
     THROW_COOLDOWN = 2.5
-    PROJECTILE_SPEED = 680
+    MIN_THROW_RANGE = 95
+    MAX_THROW_RANGE = 460
+    FULL_CHARGE_TIME = 0.95
 
     def __init__(self, width):
         self.width = width
@@ -74,10 +90,30 @@ class TrainingCenter:
         self.bursts = []
         self.pickup = None
         self.cooldown = 0.0
+        self.aim_time = None
+        self.pending_arc = None
+
+    def cancel_aim(self):
+        self.aim_time = None
+
+    def aim_arc(self, player):
+        charge = min(1.0, self.aim_time / self.FULL_CHARGE_TIME)
+        distance = self.MIN_THROW_RANGE + charge * (self.MAX_THROW_RANGE - self.MIN_THROW_RANGE)
+        landing_x = min(self.width - 12, max(12, player.x + player.facing * distance))
+        return ThrowArc(player.x, player.ground_y + 54, landing_x, player.ground_y + 8)
 
     def handle_event(self, event, player):
         if event.type == p.SDL_KEYDOWN and event.key == p.SDLK_i:
             self.dummies.append(Dummy(player.x, player.ground_y))
+        if event.type == p.SDL_KEYDOWN and event.key == p.SDLK_v:
+            if (self.aim_time is None and self.stored and self.cooldown <= 0
+                    and player.attack_time is None and player.jump_time is None
+                    and player.ground_action is None):
+                self.aim_time = 0.0
+        elif event.type == p.SDL_KEYUP and event.key == p.SDLK_v and self.aim_time is not None:
+            if self.stored and player.start_ground_action(p.SDLK_v):
+                self.pending_arc = self.aim_arc(player)
+            self.cancel_aim()
 
     def can_start_action(self, event, player):
         if event.type != p.SDL_KEYDOWN:
@@ -85,7 +121,9 @@ class TrainingCenter:
         if event.key == p.SDLK_c:
             return len(self.stored) < self.CAPACITY and self.nearest_drop(player) is not None
         if event.key == p.SDLK_v:
-            return bool(self.stored) and self.cooldown <= 0
+            return False
+        if self.aim_time is not None:
+            return event.key in (p.SDLK_LEFT, p.SDLK_RIGHT)
         return True
 
     def nearest_drop(self, player):
@@ -104,6 +142,10 @@ class TrainingCenter:
             self.pickup = None
         self.cooldown = max(0.0, self.cooldown - dt)
         self.stored = [(value, ttl - dt) for value, ttl in self.stored if ttl > dt]
+        if not self.stored:
+            self.cancel_aim()
+        if self.aim_time is not None:
+            self.aim_time = min(self.FULL_CHARGE_TIME, self.aim_time + dt)
         for drop in self.drops:
             drop.time_left -= dt
         self.drops = [drop for drop in self.drops if drop.time_left > 0]
@@ -128,28 +170,36 @@ class TrainingCenter:
                     self.drops.remove(drop)
                     self.stored.append((drop.value, self.HOLD_TIME))
                     self.pickup = drop
-            elif row == 2 and self.stored and self.cooldown <= 0:
-                total = sum(value for value, _ in self.stored)
-                self.projectiles.append(Projectile(player.x, player.ground_y + 54, player.facing, total))
-                self.stored.clear()
-                self.cooldown = self.THROW_COOLDOWN
+            elif row == 2 and self.pending_arc is not None:
+                if self.stored:
+                    total = sum(value for value, _ in self.stored)
+                    self.projectiles.append(Projectile(self.pending_arc, total))
+                    self.stored.clear()
+                    self.cooldown = self.THROW_COOLDOWN
+                self.pending_arc = None
 
-        active = []
-        for shot in self.projectiles:
-            next_x = shot.x + shot.direction * self.PROJECTILE_SPEED * dt
-            left, right = sorted((shot.x, next_x))
-            targets = (dummy for dummy in self.dummies if dummy.hp > 0
-                       and left <= dummy.x + 19 and right >= dummy.x - 19
-                       and dummy.y + 29 <= shot.y <= dummy.y + 88)
-            target = min(targets, key=lambda dummy: dummy.x * shot.direction, default=None)
-            if target is not None:
-                self.damage(target, shot.value)
-                self.bursts.append(Burst(target.x, shot.y, shot.value))
-            elif 0 <= next_x <= self.width:
-                shot.x = next_x
-                active.append(shot)
-        self.projectiles = active
+        self.projectiles = [shot for shot in self.projectiles if self.advance_shot(shot, dt)]
         self.dummies = [dummy for dummy in self.dummies if dummy.hp > 0]
+
+    def advance_shot(self, shot, dt):
+        distance = abs(shot.arc.landing_x - shot.arc.x)
+        duration = 0.36 + distance / 1100
+        end = min(1.0, shot.progress + dt / duration)
+        # 프레임 사이의 궤적도 검사해 얇은 표적을 건너뛰지 않게 한다.
+        steps = max(1, ceil((end - shot.progress) * 100))
+        for step in range(steps + 1):
+            progress = shot.progress + (end - shot.progress) * step / steps
+            x, y = shot.arc.point(progress)
+            for dummy in self.dummies:
+                if dummy.hp > 0 and abs(x - dummy.x) <= 22 and dummy.y + 8 <= y <= dummy.y + 88:
+                    self.damage(dummy, shot.value)
+                    self.bursts.append(Burst(x, y, shot.value))
+                    return False
+        shot.progress = end
+        if end == 1.0:
+            self.bursts.append(Burst(*shot.arc.point(end), shot.value))
+            return False
+        return True
 
     def draw_dummy(self):
         for dummy in self.dummies:
@@ -177,13 +227,20 @@ class TrainingCenter:
         for burst in self.bursts:
             self.draw_burst(burst)
         for shot in self.projectiles:
-            fill(shot.x - 15, shot.y - 13, 30, 26, (25, 89, 117))
-            self.font.draw(shot.x - 7, shot.y, str(shot.value), (196, 250, 255))
+            x, y = shot.arc.point(shot.progress)
+            fill(x - 15, y - 13, 30, 26, (25, 89, 117))
+            self.font.draw(x - 7, y, str(shot.value), (196, 250, 255))
+        if self.aim_time is not None:
+            arc = self.aim_arc(player)
+            for dot in range(1, 24):
+                x, y = arc.point(dot / 24)
+                fill(x - 2, y - 2, 4, 4, (145, 242, 255))
+            fill(arc.landing_x - 13, arc.ground_y - 2, 26, 4, (255, 217, 125))
         fill(0, height - 82, width, 82, (19, 25, 42))
         self.font.draw(24, height - 22, '훈련장  |  I키를 누를 시 허수아비 더미를 생성합니다', (255, 230, 177))
         held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
         cooldown = f'{self.cooldown:.1f}초' if self.cooldown else '준비'
-        self.font.draw(24, height - 56, f'X 공격   C 회수   V 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
+        self.font.draw(24, height - 56, f'X 공격   C 회수   V 누르기 조준 / 놓기 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
 
     def draw_burst(self, burst):
         progress = burst.age / 0.60

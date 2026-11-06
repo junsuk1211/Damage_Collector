@@ -58,11 +58,17 @@ class Player:
                     self.jump_time = 0.0
                     self.walk_time = 0.0
                 elif event.key in GROUND_ACTIONS:
-                    self.ground_action = GROUND_ACTIONS[event.key]
-                    self.action_time = 0.0
-                    self.walk_time = 0.0
+                    self.start_ground_action(event.key)
         elif event.type == pico2d.SDL_KEYUP:
             self._pressed.discard(event.key)
+
+    def start_ground_action(self, key):
+        if self.attack_time is not None or self.jump_time is not None or self.ground_action is not None:
+            return False
+        self.ground_action = GROUND_ACTIONS[key]
+        self.action_time = 0.0
+        self.walk_time = 0.0
+        return True
 
     def clear_input(self):
         self._pressed.clear()

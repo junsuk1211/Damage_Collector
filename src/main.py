@@ -62,6 +62,7 @@ def main(frame_limit=None):
             # 다른 창으로 전환할 때 키 해제 이벤트를 놓쳐도 계속 걷지 않는다.
             if not SDL_GetKeyboardFocus():
                 player.clear_input()
+                training.cancel_aim()
             if not running:
                 break
             if screen in ('chapter1', 'training'):
