@@ -71,8 +71,7 @@ class ChapterOne(TrainingCenter):
                 0, 'h' if guard.facing > 0 else '',
                 guard.x - guard.facing * offset, guard.y + 47, 116 * (right - left) / width, 116,
             )
-            fill(guard.x - 27, guard.y + 105, 54, 6, (65, 28, 37))
-            fill(guard.x - 27, guard.y + 105, 54 * guard.hp / 12, 6, (223, 100, 81))
+            self.draw_target_health(guard, guard.y + 108)
 
     def draw_banner(self, width, height, player):
         self.draw_number_effects(player)

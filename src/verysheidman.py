@@ -10,4 +10,5 @@ except ImportError:
 
 @dataclass
 class Verysheidman(Dummy):
-    hp: int = 18
+    MAX_HP = 18
+    hp: int = MAX_HP

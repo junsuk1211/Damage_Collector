@@ -15,9 +15,11 @@ except ImportError:
 
 @dataclass
 class Dummy:
+    MAX_HP = 10
+
     x: float
     y: float
-    hp: int = 10
+    hp: int = MAX_HP
     flash: float = 0.0
 
 
@@ -226,9 +228,19 @@ class TrainingCenter:
             cell_width, cell_height = self.dummy_image.w // 4, self.dummy_image.h // 4
             self.dummy_image.clip_draw(0, cell_height, cell_width, cell_height,
                                        x, y + 54, 116, 116)
-            fill(x - 28, y + 109, 56, 6, (77, 34, 41))
-            fill(x - 28, y + 109, 56 * dummy.hp / 10, 6,
-                 (255, 233, 165) if dummy.flash else (240, 105, 80))
+            self.draw_target_health(dummy, y + 109)
+
+    def draw_target_health(self, target, y):
+        width, height = 88, 24
+        left = max(2, min(self.width - width - 2, target.x - width / 2))
+        fill(left, y, width, height, (233, 218, 191))
+        fill(left + 2, y + 2, width - 4, height - 4, (12, 12, 16))
+        if target.hp > 0:
+            fill(left + 2, y + 2, (width - 4) * target.hp / target.MAX_HP,
+                 height - 4, (166, 32, 49))
+        label = f'{target.hp}/{target.MAX_HP}'
+        self.spark_font.draw(left + width / 2 - 4.5 * len(label), y + height / 2,
+                             label, (255, 255, 255))
 
     def draw_number_effects(self, player):
         for drop in self.drops:

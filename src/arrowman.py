@@ -10,4 +10,5 @@ except ImportError:
 
 @dataclass
 class Arrowman(Dummy):
-    hp: int = 9
+    MAX_HP = 9
+    hp: int = MAX_HP

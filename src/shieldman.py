@@ -10,7 +10,8 @@ except ImportError:
 
 @dataclass
 class Shieldman(Dummy):
-    hp: int = 12
+    MAX_HP = 12
+    hp: int = MAX_HP
     facing: int = -1
     walk_time: float = 0.0
     attack_age: float | None = None
