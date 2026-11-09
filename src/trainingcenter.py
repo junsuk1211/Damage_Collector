@@ -118,11 +118,13 @@ class TrainingCenter:
         if event.type == p.SDL_KEYDOWN and event.key == p.SDLK_i:
             self.dummies.append(Dummy(player.x, player.ground_y))
         if event.type == p.SDL_KEYDOWN and event.key == p.SDLK_v:
-            if (self.aim_time is None and self.stored and self.cooldown <= 0
+            if self.aim_time is not None:
+                self.cancel_aim()
+            elif (self.stored and self.cooldown <= 0
                     and player.attack_time is None and player.jump_time is None
                     and player.ground_action is None):
                 self.aim_time = 0.0
-        elif event.type == p.SDL_KEYUP and event.key == p.SDLK_v and self.aim_time is not None:
+        elif event.type == p.SDL_KEYDOWN and event.key == p.SDLK_b and self.aim_time is not None:
             if self.stored and player.start_ground_action(p.SDLK_v):
                 self.pending_arc = self.aim_arc(player)
             self.cancel_aim()
@@ -130,12 +132,12 @@ class TrainingCenter:
     def can_start_action(self, event, player):
         if event.type != p.SDL_KEYDOWN:
             return True
-        if event.key == p.SDLK_c:
-            return len(self.stored) < self.CAPACITY and self.nearest_drop(player) is not None
-        if event.key == p.SDLK_v:
+        if event.key in (p.SDLK_v, p.SDLK_b):
             return False
         if self.aim_time is not None:
             return event.key in (p.SDLK_LEFT, p.SDLK_RIGHT)
+        if event.key == p.SDLK_c:
+            return len(self.stored) < self.CAPACITY and self.nearest_drop(player) is not None
         return True
 
     def nearest_drop(self, player):
@@ -274,7 +276,7 @@ class TrainingCenter:
         self.font.draw(24, height - 22, '훈련장  |  I키를 누를 시 허수아비 더미를 생성합니다  |  Esc 시작 화면으로', (255, 230, 177))
         held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
         cooldown = f'{self.cooldown:.1f}초' if self.cooldown else '준비'
-        self.font.draw(24, height - 56, f'X 공격   C 회수   V 누르기 조준 / 놓기 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
+        self.font.draw(24, height - 56, f'X 공격   C 회수   V 조준 / 취소   B 발사     보관 {held}     투척 {cooldown}', (120, 238, 255))
 
     def draw_burst(self, burst):
         progress = burst.age / 0.60
