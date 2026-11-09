@@ -79,7 +79,7 @@ class TrainingCenter:
     ATTACK_REACH = 92
     PICKUP_REACH = 84
     CAPACITY = 3
-    HOLD_TIME = 6.0
+    HOLD_TIME = 8.0
     THROW_COOLDOWN = 2.5
     MIN_THROW_RANGE = 95
     MAX_THROW_RANGE = 460
