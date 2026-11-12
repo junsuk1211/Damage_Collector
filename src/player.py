@@ -66,7 +66,8 @@ class Player:
             self._pressed.discard(event.key)
 
     def start_ground_action(self, key):
-        if self.attack_time is not None or self.jump_time is not None or self.ground_action is not None:
+        if (self.attack_time is not None or self.ground_action is not None
+                or (self.jump_time is not None and key != pico2d.SDLK_v)):
             return False
         self.ground_action = GROUND_ACTIONS[key]
         self.action_time = 0.0
@@ -98,6 +99,10 @@ class Player:
 
     def update_motion(self, dt, world_width):
         dt = max(0.0, dt)
+        if self.jump_time is not None:
+            self.jump_time += dt
+            if self.jump_time >= JUMP_FRAME_ENDS[-1]:
+                self.jump_time = None
         if self.ground_action is not None:
             row, ends = self.ground_action
             if row == 3:
@@ -111,10 +116,6 @@ class Player:
             if self.attack_time >= ATTACK_FRAME_ENDS[-1]:
                 self.attack_time = None
             return
-        if self.jump_time is not None:
-            self.jump_time += dt
-            if self.jump_time >= JUMP_FRAME_ENDS[-1]:
-                self.jump_time = None
         direction = int(pico2d.SDLK_RIGHT in self._pressed) - int(
             pico2d.SDLK_LEFT in self._pressed
         )
@@ -159,7 +160,7 @@ class Player:
             raise RuntimeError('캔버스를 연 뒤 load_image()를 먼저 호출하세요.')
         if self.ground_action is not None:
             row, ends = self.ground_action
-            self.draw_motion(bisect_right(ends, self.action_time), row, ability=True,
+            self.draw_motion(bisect_right(ends, self.action_time), row, ability=True, lift=self.jump_lift,
                              number_motion=row in (1, 2))
             return
         if self.attack_time is not None:

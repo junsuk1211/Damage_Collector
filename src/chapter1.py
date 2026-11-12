@@ -8,10 +8,12 @@ try:
     from .selectscreen import fill
     from .trainingcenter import TrainingCenter
     from .shieldman import Shieldman
+    from .terrain import stop_at_boxes
 except ImportError:
     from selectscreen import fill
     from trainingcenter import TrainingCenter
     from shieldman import Shieldman
+    from terrain import stop_at_boxes
 
 
 class ChapterOne(TrainingCenter):
@@ -61,14 +63,16 @@ class ChapterOne(TrainingCenter):
         super().update(dt, player, previous_attack_time, previous_action_time)
         self.hurt_time = max(0.0, self.hurt_time - dt)
         for guard in self.dummies:
-            if guard.attack_age is None and abs(player.x - guard.x) > 520:
+            if (guard.attack_age is None and guard.obstacle_jump is None
+                    and guard.y == self.FLOOR_Y and abs(player.x - guard.x) > 520):
                 guard.walk_time = 0.0
                 continue
-            if guard.advance(dt, player):
+            if guard.advance(dt, player, self.PLATFORMS, self.FLOOR_Y):
                 distance = (player.x - guard.x) * guard.facing
                 rolling = player.ground_action is not None and player.ground_action[0] == 3
                 if (not self.hurt_time and not rolling
-                        and player.ground_y + player.jump_lift - guard.y < 45
+                        and abs(player.ground_y + player.jump_lift - guard.y) < 45
+                        and stop_at_boxes(guard.x, player.x, guard.y, 0, self.PLATFORMS) == player.x
                         and -12 <= distance <= 87):
                     self.health -= 1
                     self.hurt_time = 0.65
