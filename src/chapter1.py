@@ -9,11 +9,13 @@ try:
     from .trainingcenter import TrainingCenter
     from .shieldman import Shieldman
     from .terrain import stop_at_boxes
+    from .firepillar import FirePillar
 except ImportError:
     from selectscreen import fill
     from trainingcenter import TrainingCenter
     from shieldman import Shieldman
     from terrain import stop_at_boxes
+    from firepillar import FirePillar
 
 
 class ChapterOne(TrainingCenter):
@@ -26,9 +28,10 @@ class ChapterOne(TrainingCenter):
     STONE_PLATFORMS = ((1270, 1408, 193),)
     SCAFFOLDS = ((1468, 1718, 225), (1785, 1925, 192))
     BOXES = (
-        (385, 437, 176),
-        (1160, 1216, 175),
+        (385, 428, 173),     # 작은 상자
+        (1145, 1216, 188),   # 중간 보급 상자
     )
+    FIRE_VENTS = ((1035, 1.2), (2090, 2.3))
 
     @property
     def platforms(self):
@@ -52,12 +55,14 @@ class ChapterOne(TrainingCenter):
         self.guard_image = p.load_image(str(path))
         props_path = path.parents[1] / 'props/chapter1-props.png'
         self.props = p.load_image(str(props_path))
+        self.crate = p.load_image(str(props_path.with_name('ironbound-crate.png')))
 
     def reset(self):
         super().reset()
         self.dummies = [Shieldman(x, self.FLOOR_Y) for x in self.GUARD_POSITIONS]
         self.health = self.MAX_HEALTH
         self.hurt_time = 0.0
+        self.fire_pillars = [FirePillar(x, self.FLOOR_Y, delay) for x, delay in self.FIRE_VENTS]
 
     def handle_event(self, event, player):
         if self.health and not (event.type == p.SDL_KEYDOWN and event.key == p.SDLK_i):
@@ -80,6 +85,10 @@ class ChapterOne(TrainingCenter):
             return
         super().update(dt, player, previous_attack_time, previous_action_time)
         self.hurt_time = max(0.0, self.hurt_time - dt)
+        for pillar in self.fire_pillars:
+            pillar.update(dt)
+            if pillar.hits(player):
+                self.hurt_player(player)
         for guard in self.dummies:
             if (guard.attack_age is None and guard.obstacle_jump is None
                     and guard.y == self.FLOOR_Y and abs(player.x - guard.x) > 520):
@@ -88,23 +97,30 @@ class ChapterOne(TrainingCenter):
                 continue
             if guard.advance(dt, player, self.solid_obstacles, self.FLOOR_Y, self.platforms):
                 distance = (player.x - guard.x) * guard.facing
-                rolling = player.ground_action is not None and player.ground_action[0] == 3
-                if (not self.hurt_time and not rolling
-                        and abs(player.ground_y + player.jump_lift - guard.y) < 45
+                if (abs(player.ground_y + player.jump_lift - guard.y) < 45
                         and stop_at_boxes(guard.x, player.x, guard.y, 0, self.solid_obstacles) == player.x
                         and -12 <= distance <= 87):
-                    self.health -= 1
-                    self.hurt_time = 0.65
-                    self.stored.clear()
-                    self.cancel_aim()
+                    self.hurt_player(player)
+
+    def hurt_player(self, player):
+        rolling = player.ground_action is not None and player.ground_action[0] == 3
+        if self.health and not self.hurt_time and not rolling:
+            self.health -= 1
+            self.hurt_time = 0.65
+            self.stored.clear()
+            self.cancel_aim()
 
     def draw_props(self):
         # Image crops use top-left coordinates, while pico2d clips from the bottom.
-        crate = (101, 225, 510, 418)
         stone = (743, 362, 685, 277)
         scaffold = (1464, 252, 694, 392)
-        props = [(box, crate) for box in self.BOXES]
-        props.extend((platform, stone) for platform in self.STONE_PLATFORMS)
+        for left, right, top in self.BOXES:
+            x, width = left - self.camera_x, right - left
+            if x < self.viewport_width and x + width > 0:
+                height = top - self.FLOOR_Y
+                self.crate.clip_draw(98, self.crate.h - 1100, 1120, 1000,
+                                     x + width / 2, self.FLOOR_Y + height / 2, width, height)
+        props = [(platform, stone) for platform in self.STONE_PLATFORMS]
         props.extend((platform, scaffold) for platform in self.SCAFFOLDS)
         for (left, right, top), (source_x, source_y, source_width, source_height) in props:
             x, width = left - self.camera_x, right - left
@@ -117,6 +133,8 @@ class ChapterOne(TrainingCenter):
             )
         if self.NEXT_STAGE:
             self.draw_exit_marker()
+        for pillar in self.fire_pillars:
+            pillar.draw(self.camera_x, self.viewport_width)
 
     def draw_exit_marker(self):
         x = self.exit_x - self.camera_x
