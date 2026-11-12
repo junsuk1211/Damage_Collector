@@ -13,6 +13,7 @@ try:
     from .manual import Manual
     from .trainingcenter import TrainingCenter
     from .chapter1 import ChapterOne
+    from .chapter2 import ChapterTwo
     from .gameover import GameOverScreen
 except ImportError:
     from player import Player
@@ -20,6 +21,7 @@ except ImportError:
     from manual import Manual
     from trainingcenter import TrainingCenter
     from chapter1 import ChapterOne
+    from chapter2 import ChapterTwo
     from gameover import GameOverScreen
 
 
@@ -40,8 +42,9 @@ def main(frame_limit=None):
         game_over = GameOverScreen(WIDTH, HEIGHT)
         menus = {'menu': menu, 'gameover': game_over}
         training = TrainingCenter(WIDTH)
-        chapter = ChapterOne(WIDTH)
-        rooms = {'training': training, 'chapter1': chapter}
+        stages = {'chapter1': ChapterOne(WIDTH), 'chapter2': ChapterTwo(WIDTH)}
+        rooms = {'training': training, **stages}
+        retry_stage = 'chapter1'
         screen = 'menu'
         previous = perf_counter()
         running, frames = True, 0
@@ -61,13 +64,23 @@ def main(frame_limit=None):
                 elif screen in menus:
                     destination = menus[screen].handle_event(event)
                     if destination:
+                        if screen == 'gameover' and destination == 'chapter1':
+                            destination = retry_stage
                         screen = destination
-                        if screen in ('chapter1', 'training'):
+                        if screen in rooms:
                             player = Player(ground_y=TRAINING_GROUND_Y) if screen == 'training' else Player()
                             player.load_image()
                             rooms[screen].reset()
-                elif screen in rooms and (screen != 'chapter1' or chapter.health):
+                elif screen in rooms:
                     room = rooms[screen]
+                    if (screen in stages and event.type == pico2d.SDL_KEYDOWN
+                            and event.key == pico2d.SDLK_z and room.can_advance(player)):
+                        screen = room.NEXT_STAGE
+                        stages[screen].reset()
+                        stages[screen].health = room.health
+                        player = Player()
+                        player.load_image()
+                        continue
                     if room.can_start_action(event, player):
                         player.handle_event(event)
                     room.handle_event(event, player)
@@ -78,14 +91,16 @@ def main(frame_limit=None):
                     rooms[screen].cancel_aim()
             if not running:
                 break
-            if screen in rooms and (screen != 'chapter1' or chapter.health):
+            if screen in rooms:
                 previous_attack_time = player.attack_time
                 previous_action_time = player.action_time
                 room = rooms[screen]
-                platforms = chapter.PLATFORMS if screen == 'chapter1' else ()
-                player.update(dt, room.width, platforms)
+                platforms = room.platforms if screen in stages else ()
+                boxes = room.solid_obstacles if screen in stages else ()
+                player.update(dt, room.width, platforms, boxes)
                 room.update(dt, player, previous_attack_time, previous_action_time)
-                if screen == 'chapter1' and not chapter.health:
+                if screen in stages and not room.health:
+                    retry_stage = screen
                     screen = 'gameover'
             pico2d.clear_canvas()
             if screen in menus:
@@ -99,12 +114,14 @@ def main(frame_limit=None):
                 if screen == 'training':
                     mountains.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
                 else:
-                    background.draw(WIDTH / 2 - room.camera_x, HEIGHT / 2, WIDTH, HEIGHT)
-                    background.composite_draw(0, 'h', WIDTH * 1.5 - room.camera_x,
-                                              HEIGHT / 2, WIDTH, HEIGHT)
-                    chapter.draw_platforms()
+                    if room.camera_x < WIDTH:
+                        background.draw(WIDTH / 2 - room.camera_x, HEIGHT / 2, WIDTH, HEIGHT)
+                    if room.camera_x > 0:
+                        background.composite_draw(0, 'h', WIDTH * 1.5 - room.camera_x,
+                                                  HEIGHT / 2, WIDTH, HEIGHT)
+                    room.draw_props()
                 room.draw_dummy()
-                if screen != 'chapter1' or not chapter.health or int(chapter.hurt_time * 16) % 2 == 0:
+                if screen not in stages or int(room.hurt_time * 16) % 2 == 0:
                     player.draw()
                 room.draw_banner(WIDTH, HEIGHT, player)
             pico2d.update_canvas()

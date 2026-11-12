@@ -19,25 +19,43 @@ except ImportError:
 class ChapterOne(TrainingCenter):
     MAX_HEALTH = 5
     FLOOR_Y = 144
-    PLATFORMS = (
-        (390, 505, 190),
-        (570, 720, 229),
-        (1050, 1205, 192),
-        (1430, 1555, 194),
-        (1615, 1770, 236),
-        (1830, 1965, 192),
-        (2200, 2350, 192),
+    TITLE = '챕터 1  |  성문 경비병'
+    NEXT_STAGE = 'chapter2'
+    # 첫 상자를 넘은 뒤 평지 전투, 후반은 석단과 발판을 잇는 위쪽 경로.
+    GUARD_POSITIONS = (930, 1950)
+    STONE_PLATFORMS = ((1270, 1408, 193),)
+    SCAFFOLDS = ((1468, 1718, 225), (1785, 1925, 192))
+    BOXES = (
+        (385, 437, 176),
+        (1160, 1216, 175),
     )
+
+    @property
+    def platforms(self):
+        return self.SCAFFOLDS
+
+    @property
+    def solid_obstacles(self):
+        return (*self.BOXES, *self.STONE_PLATFORMS)
+
+    @property
+    def exit_x(self):
+        return self.width - 110
+
+    def can_advance(self, player):
+        return bool(self.NEXT_STAGE and not self.dummies and player.x >= self.exit_x)
 
     def __init__(self, width):
         super().__init__(width * 2)
         self.viewport_width = width
         path = Path(__file__).resolve().parents[1] / 'assets/characters/chapter1-guard.png'
         self.guard_image = p.load_image(str(path))
+        props_path = path.parents[1] / 'props/chapter1-props.png'
+        self.props = p.load_image(str(props_path))
 
     def reset(self):
         super().reset()
-        self.dummies = [Shieldman(735, self.FLOOR_Y), Shieldman(1960, self.FLOOR_Y)]
+        self.dummies = [Shieldman(x, self.FLOOR_Y) for x in self.GUARD_POSITIONS]
         self.health = self.MAX_HEALTH
         self.hurt_time = 0.0
 
@@ -53,7 +71,7 @@ class ChapterOne(TrainingCenter):
 
     def aim_arc(self, player):
         arc = super().aim_arc(player)
-        arc.ground_y = max((top for left, right, top in self.PLATFORMS
+        arc.ground_y = max((top for left, right, top in (*self.platforms, *self.solid_obstacles)
                             if left <= arc.landing_x <= right), default=self.FLOOR_Y) + 8
         return arc
 
@@ -66,37 +84,51 @@ class ChapterOne(TrainingCenter):
             if (guard.attack_age is None and guard.obstacle_jump is None
                     and guard.y == self.FLOOR_Y and abs(player.x - guard.x) > 520):
                 guard.walk_time = 0.0
+                guard.speed = 0.0
                 continue
-            if guard.advance(dt, player, self.PLATFORMS, self.FLOOR_Y):
+            if guard.advance(dt, player, self.solid_obstacles, self.FLOOR_Y, self.platforms):
                 distance = (player.x - guard.x) * guard.facing
                 rolling = player.ground_action is not None and player.ground_action[0] == 3
                 if (not self.hurt_time and not rolling
                         and abs(player.ground_y + player.jump_lift - guard.y) < 45
-                        and stop_at_boxes(guard.x, player.x, guard.y, 0, self.PLATFORMS) == player.x
+                        and stop_at_boxes(guard.x, player.x, guard.y, 0, self.solid_obstacles) == player.x
                         and -12 <= distance <= 87):
                     self.health -= 1
                     self.hurt_time = 0.65
                     self.stored.clear()
                     self.cancel_aim()
 
-    def draw_platforms(self):
-        for index, (left, right, top) in enumerate(self.PLATFORMS):
-            x = left - self.camera_x
-            width = right - left
+    def draw_props(self):
+        # Image crops use top-left coordinates, while pico2d clips from the bottom.
+        crate = (101, 225, 510, 418)
+        stone = (743, 362, 685, 277)
+        scaffold = (1464, 252, 694, 392)
+        props = [(box, crate) for box in self.BOXES]
+        props.extend((platform, stone) for platform in self.STONE_PLATFORMS)
+        props.extend((platform, scaffold) for platform in self.SCAFFOLDS)
+        for (left, right, top), (source_x, source_y, source_width, source_height) in props:
+            x, width = left - self.camera_x, right - left
             if x >= self.viewport_width or x + width <= 0:
                 continue
-            if index in (1, 4):
-                for support in (x + 13, x + width - 24):
-                    fill(support, self.FLOOR_Y, 11, top - self.FLOOR_Y, (63, 42, 40))
-                    fill(support + 2, self.FLOOR_Y, 3, top - self.FLOOR_Y, (122, 82, 57))
-                fill(x, top - 16, width, 16, (100, 64, 46))
-                fill(x + 3, top - 5, width - 6, 5, (205, 153, 94))
-            else:
-                fill(x, self.FLOOR_Y, width, top - self.FLOOR_Y, (49, 48, 69))
-                for joint in range(8, width - 8, 26):
-                    fill(x + joint, self.FLOOR_Y, 2, top - self.FLOOR_Y - 7, (34, 33, 49))
-                fill(x, top - 7, width, 7, (128, 117, 120))
-                fill(x + 2, top - 3, width - 4, 3, (180, 160, 145))
+            height = top - self.FLOOR_Y
+            self.props.clip_draw(
+                source_x, self.props.h - source_y - source_height, source_width, source_height,
+                x + width / 2, self.FLOOR_Y + height / 2, width, height,
+            )
+        if self.NEXT_STAGE:
+            self.draw_exit_marker()
+
+    def draw_exit_marker(self):
+        x = self.exit_x - self.camera_x
+        if x > self.viewport_width + 42:
+            return
+        y = self.FLOOR_Y
+        ready = not self.dummies
+        border = (255, 210, 112) if ready else (146, 130, 113)
+        fill(x + 30, y, 6, 66, (88, 60, 49))
+        fill(x - 12, y + 53, 90, 30, border)
+        fill(x - 10, y + 55, 86, 26, (31, 29, 43))
+        self.spark_font.draw(x, y + 68, '출구  →', border)
 
     def draw_dummy(self):
         width, height = self.guard_image.w // 4, self.guard_image.h // 2
@@ -122,7 +154,7 @@ class ChapterOne(TrainingCenter):
     def draw_banner(self, width, height, player):
         self.draw_number_effects(player)
         fill(0, height - 62, width, 62, (19, 25, 42))
-        self.font.draw(24, height - 30, '챕터 1  |  성문 경비병', (255, 230, 177))
+        self.font.draw(24, height - 30, self.TITLE, (255, 230, 177))
         for index in range(self.MAX_HEALTH):
             color = (226, 87, 79) if index < self.health else (73, 42, 52)
             fill(310 + index * 26, height - 40, 20, 20, color)
@@ -130,5 +162,9 @@ class ChapterOne(TrainingCenter):
         remaining = len(self.dummies)
         self.font.draw(465, height - 30, f'보관 {held}    남은 경비병 {remaining}    Esc 시작 화면', (153, 227, 245))
         if not self.dummies:
-            fill(width // 2 - 170, height // 2 - 34, 340, 68, (19, 25, 42))
-            self.font.draw(width // 2 - 130, height // 2, '경비병을 쓰러뜨렸다   [Esc]', (255, 230, 177))
+            if self.NEXT_STAGE:
+                message = '[Z] 다음 스테이지' if self.can_advance(player) else '클리어 · 오른쪽 출구로 이동'
+            else:
+                message = '챕터 2 클리어 · [Esc] 시작 화면'
+            fill(width - 325, height - 110, 305, 36, (19, 25, 42))
+            self.font.draw(width - 311, height - 92, message, (255, 230, 177))

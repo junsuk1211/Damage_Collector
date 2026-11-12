@@ -5,6 +5,11 @@ from pathlib import Path
 
 import pico2d
 
+try:
+    from .terrain import stop_at_boxes
+except ImportError:
+    from terrain import stop_at_boxes
+
 
 ASSET_PATH = Path(__file__).resolve().parents[1] / 'assets' / 'characters' / 'player-motion.png'
 WALK_FRAME_TIME = 0.085
@@ -19,6 +24,7 @@ GROUND_ACTIONS = {
     pico2d.SDLK_LSHIFT: (3, (0.07, 0.16, 0.25, 0.36)),
 }
 DODGE_SPEED = 460
+BODY_HALF_WIDTH = 14
 
 
 class Player:
@@ -77,13 +83,15 @@ class Player:
     def clear_input(self):
         self._pressed.clear()
 
-    def update(self, dt, world_width, platforms=()):
+    def update(self, dt, world_width, platforms=(), boxes=()):
         previous_feet = self.ground_y + self.jump_lift
-        self.update_motion(dt, world_width)
-        if not platforms:
+        self.update_motion(dt, world_width, boxes)
+        if not platforms and not boxes:
             return
-        support = max((top for left, right, top in platforms
-                       if left <= self.x <= right and top <= previous_feet),
+        box_tops = ((left - BODY_HALF_WIDTH, right + BODY_HALF_WIDTH, top)
+                    for left, right, top in boxes)
+        support = max((top for left, right, top in (*platforms, *box_tops)
+                       if left < self.x < right and top <= previous_feet),
                       default=self.floor_y)
         if self.jump_time is not None:
             feet = self.ground_y + self.jump_lift
@@ -97,7 +105,7 @@ class Player:
         if self.ground_y == support:
             self.fall_speed = 0.0
 
-    def update_motion(self, dt, world_width):
+    def update_motion(self, dt, world_width, boxes=()):
         dt = max(0.0, dt)
         if self.jump_time is not None:
             self.jump_time += dt
@@ -106,7 +114,10 @@ class Player:
         if self.ground_action is not None:
             row, ends = self.ground_action
             if row == 3:
-                self.move_horizontal(self.facing * DODGE_SPEED * min(dt, ends[-1] - self.action_time), world_width)
+                self.move_horizontal(
+                    self.facing * DODGE_SPEED * min(dt, ends[-1] - self.action_time),
+                    world_width, boxes,
+                )
             self.action_time += dt
             if self.action_time >= ends[-1]:
                 self.ground_action = None
@@ -122,12 +133,14 @@ class Player:
         if direction:
             self.facing = direction
         previous_x = self.x
-        self.move_horizontal(direction * self.speed * dt, world_width)
+        self.move_horizontal(direction * self.speed * dt, world_width, boxes)
         self.walk_time = self.walk_time + dt if self.x != previous_x else 0.0
 
-    def move_horizontal(self, distance, world_width):
+    def move_horizontal(self, distance, world_width, boxes=()):
         half_width = min(self.width / 2, world_width / 2)
-        self.x = max(half_width, min(world_width - half_width, self.x + distance))
+        next_x = max(half_width, min(world_width - half_width, self.x + distance))
+        feet = self.ground_y + self.jump_lift
+        self.x = stop_at_boxes(self.x, next_x, feet, BODY_HALF_WIDTH, boxes)
 
     def draw_motion(self, frame, row, *, ability=False, lift=0, number_motion=False):
         image, rows = (self.abilities, 4) if ability else (self.image, 2)
