@@ -25,6 +25,9 @@ class Player:
     def __init__(self, x=240.0, ground_y=144.0, height=96, speed=260.0):
         self.x = float(x)
         self.ground_y = ground_y
+        self.floor_y = ground_y
+        self.fall_speed = 0.0
+        self.camera_x = 0.0
         self.height = height
         self.speed = speed  # 초당 이동 거리(픽셀)
         self.facing = 1
@@ -54,7 +57,7 @@ class Player:
                 if event.key == pico2d.SDLK_x:
                     self.attack_time = 0.0
                     self.walk_time = 0.0
-                elif event.key == pico2d.SDLK_UP:
+                elif event.key == pico2d.SDLK_UP and not self.fall_speed:
                     self.jump_time = 0.0
                     self.walk_time = 0.0
                 elif event.key in GROUND_ACTIONS:
@@ -73,7 +76,27 @@ class Player:
     def clear_input(self):
         self._pressed.clear()
 
-    def update(self, dt, world_width):
+    def update(self, dt, world_width, platforms=()):
+        previous_feet = self.ground_y + self.jump_lift
+        self.update_motion(dt, world_width)
+        if not platforms:
+            return
+        support = max((top for left, right, top in platforms
+                       if left <= self.x <= right and top <= previous_feet),
+                      default=self.floor_y)
+        if self.jump_time is not None:
+            feet = self.ground_y + self.jump_lift
+            if self.jump_time >= JUMP_FRAME_ENDS[1] and feet <= support <= previous_feet:
+                self.ground_y = support
+                self.jump_time = None
+                self.walk_time = 0.0
+        elif self.ground_y > support:
+            self.fall_speed += 900 * dt
+            self.ground_y = max(support, self.ground_y - self.fall_speed * dt)
+        if self.ground_y == support:
+            self.fall_speed = 0.0
+
+    def update_motion(self, dt, world_width):
         dt = max(0.0, dt)
         if self.ground_action is not None:
             row, ends = self.ground_action
@@ -119,7 +142,7 @@ class Player:
         image.clip_composite_draw(
             frame * cell_width, (rows - 1 - row) * cell_height, cell_width, cell_height,
             0, 'h' if self.facing < 0 else '',
-            self.x, self.ground_y + self.height / 2 - foot_padding + lift,
+            self.x - self.camera_x, self.ground_y + self.height / 2 - foot_padding + lift,
             self.height * cell_width / cell_height, self.height,
         )
 

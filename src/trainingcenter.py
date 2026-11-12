@@ -79,7 +79,7 @@ class TrainingCenter:
     ATTACK_REACH = 92
     PICKUP_REACH = 84
     CAPACITY = 3
-    HOLD_TIME = 8.0
+    HOLD_TIME = 12.0
     THROW_COOLDOWN = 2.5
     MIN_THROW_RANGE = 95
     MAX_THROW_RANGE = 460
@@ -88,6 +88,8 @@ class TrainingCenter:
 
     def __init__(self, width):
         self.width = width
+        self.viewport_width = width
+        self.camera_x = 0.0
         self.font = korean_font(22)
         self.spark_font = korean_font(16)
         self.dummy_image = p.load_image(str(Path(__file__).resolve().parents[1]
@@ -141,7 +143,8 @@ class TrainingCenter:
         return True
 
     def nearest_drop(self, player):
-        nearby = (drop for drop in self.drops if abs(drop.display_x - player.x) <= self.PICKUP_REACH)
+        nearby = (drop for drop in self.drops if abs(drop.display_x - player.x) <= self.PICKUP_REACH
+                  and abs(drop.display_y - (player.ground_y + 32)) <= 75)
         return min(nearby, key=lambda drop: abs(drop.display_x - player.x), default=None)
 
     def damage(self, dummy, amount):
@@ -169,6 +172,7 @@ class TrainingCenter:
         if (previous_attack_time is not None and player.attack_time is not None
                 and previous_attack_time < 0.10 <= player.attack_time):
             targets = (dummy for dummy in self.dummies if dummy.hp > 0
+                       and abs(dummy.y - player.ground_y) <= 42
                        and -18 <= (dummy.x - player.x) * player.facing <= self.ATTACK_REACH)
             dummy = min(targets, key=lambda target: abs(target.x - player.x), default=None)
             if dummy is not None:
@@ -234,7 +238,10 @@ class TrainingCenter:
 
     def draw_target_health(self, target, y):
         width, height = 88, 24
-        left = max(2, min(self.width - width - 2, target.x - width / 2))
+        center = target.x - self.camera_x
+        if not 0 <= center <= self.viewport_width:
+            return
+        left = max(2, min(self.viewport_width - width - 2, center - width / 2))
         fill(left, y, width, height, (233, 218, 191))
         fill(left + 2, y + 2, width - 4, height - 4, (12, 12, 16))
         if target.hp > 0:
@@ -246,11 +253,12 @@ class TrainingCenter:
 
     def draw_number_effects(self, player):
         for drop in self.drops:
-            self.font.draw(drop.display_x - 6, drop.display_y, str(drop.value), (120, 238, 255))
+            self.font.draw(drop.display_x - self.camera_x - 6, drop.display_y, str(drop.value), (120, 238, 255))
         if self.pickup is not None:
             drop = self.pickup
             progress = min(1.0, (player.action_time - 0.19) / 0.15)
             x = drop.display_x + (player.x + 25 * player.facing - drop.display_x) * progress
+            x -= self.camera_x
             y = drop.display_y + (player.ground_y + 61 - drop.display_y) * progress
             y += 4 * (drop.value - 1) * 7 * progress * (1 - progress)
             color = ((120, 238, 255), (160, 255, 181), (255, 219, 116))[drop.value - 1]
@@ -261,14 +269,15 @@ class TrainingCenter:
             self.draw_burst(burst)
         for shot in self.projectiles:
             x, y = shot.arc.point(shot.progress)
+            x -= self.camera_x
             self.font.draw(x - 6, y - 1, str(shot.value), (15, 55, 75))
             self.font.draw(x - 7, y, str(shot.value), (196, 250, 255))
         if self.aim_time is not None:
             arc = self.aim_arc(player)
             for dot in range(1, 24):
                 x, y = arc.point(dot / 24)
-                fill(x - 2, y - 2, 4, 4, (145, 242, 255))
-            fill(arc.landing_x - 13, arc.ground_y - 2, 26, 4, (255, 217, 125))
+                fill(x - self.camera_x - 2, y - 2, 4, 4, (145, 242, 255))
+            fill(arc.landing_x - self.camera_x - 13, arc.ground_y - 2, 26, 4, (255, 217, 125))
 
     def draw_banner(self, width, height, player):
         self.draw_number_effects(player)
@@ -284,12 +293,12 @@ class TrainingCenter:
         fade = 1 - progress
         if progress < 0.30:
             size = 20 * (1 - progress / 0.30)
-            fill(burst.x - size / 2, burst.y - size / 2, size, size, (228, 252, 255))
+            fill((burst.x - self.camera_x) - size / 2, burst.y - size / 2, size, size, (228, 252, 255))
         for index in range(10):
             angle = tau * index / 10 + 0.12
             spread = radius * (1.0 if index % 2 == 0 else 0.76)
             dx, dy = cos(angle), sin(angle)
-            x = burst.x + dx * spread
+            x = (burst.x - self.camera_x) + dx * spread
             y = burst.y + dy * spread - 27 * progress ** 2
             color = (int(125 * fade), int(235 * fade), int(255 * fade))
             for trail in (8, 15):

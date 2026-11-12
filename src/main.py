@@ -81,8 +81,10 @@ def main(frame_limit=None):
             if screen in rooms and (screen != 'chapter1' or chapter.health):
                 previous_attack_time = player.attack_time
                 previous_action_time = player.action_time
-                player.update(dt, WIDTH)
-                rooms[screen].update(dt, player, previous_attack_time, previous_action_time)
+                room = rooms[screen]
+                platforms = chapter.PLATFORMS if screen == 'chapter1' else ()
+                player.update(dt, room.width, platforms)
+                room.update(dt, player, previous_attack_time, previous_action_time)
                 if screen == 'chapter1' and not chapter.health:
                     screen = 'gameover'
             pico2d.clear_canvas()
@@ -91,9 +93,16 @@ def main(frame_limit=None):
             elif screen == 'instructions':
                 book.draw(WIDTH, HEIGHT)
             elif screen in rooms:
-                scene = mountains if screen == 'training' else background
-                scene.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
                 room = rooms[screen]
+                room.camera_x = max(0.0, min(room.width - WIDTH, player.x - WIDTH / 2))
+                player.camera_x = room.camera_x
+                if screen == 'training':
+                    mountains.draw(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
+                else:
+                    background.draw(WIDTH / 2 - room.camera_x, HEIGHT / 2, WIDTH, HEIGHT)
+                    background.composite_draw(0, 'h', WIDTH * 1.5 - room.camera_x,
+                                              HEIGHT / 2, WIDTH, HEIGHT)
+                    chapter.draw_platforms()
                 room.draw_dummy()
                 if screen != 'chapter1' or not chapter.health or int(chapter.hurt_time * 16) % 2 == 0:
                     player.draw()
