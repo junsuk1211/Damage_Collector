@@ -10,12 +10,14 @@ try:
     from .shieldman import Shieldman
     from .terrain import stop_at_boxes
     from .firepillar import FirePillar
+    from .arrowrain import ArrowRain
 except ImportError:
     from selectscreen import fill
     from trainingcenter import TrainingCenter
     from shieldman import Shieldman
     from terrain import stop_at_boxes
     from firepillar import FirePillar
+    from arrowrain import ArrowRain
 
 
 class ChapterOne(TrainingCenter):
@@ -26,7 +28,8 @@ class ChapterOne(TrainingCenter):
     # 성문 앞의 낮은 석단으로 점프를 익히고, 후반에는 돌기둥 사이의 통로를 건넌다.
     GUARD_POSITIONS = (930, 1950)
     STONE_PLATFORMS = ((445, 513, 176), (1290, 1398, 194))
-    SCAFFOLDS = ((1468, 1688, 223), (1760, 1892, 191))
+    ARROW_PLATFORM = (1468, 1688, 223)
+    SCAFFOLDS = (ARROW_PLATFORM, (1760, 1892, 191))
     BOXES = ()
     USE_GATE_MASONRY = True
     FIRE_VENTS = ((1035, 1.2), (2090, 2.3))
@@ -62,6 +65,7 @@ class ChapterOne(TrainingCenter):
         self.health = self.MAX_HEALTH
         self.hurt_time = 0.0
         self.fire_pillars = [FirePillar(x, self.FLOOR_Y, delay) for x, delay in self.FIRE_VENTS]
+        self.arrow_rain = ArrowRain(self.ARROW_PLATFORM) if self.ARROW_PLATFORM else None
 
     def handle_event(self, event, player):
         if self.health and not (event.type == p.SDL_KEYDOWN and event.key == p.SDLK_i):
@@ -84,6 +88,8 @@ class ChapterOne(TrainingCenter):
             return
         super().update(dt, player, previous_attack_time, previous_action_time)
         self.hurt_time = max(0.0, self.hurt_time - dt)
+        if self.arrow_rain and self.arrow_rain.update(dt, player):
+            self.hurt_player(player)
         for pillar in self.fire_pillars:
             pillar.update(dt)
             if pillar.hits(player):
@@ -121,6 +127,8 @@ class ChapterOne(TrainingCenter):
             self.draw_exit_marker()
         for pillar in self.fire_pillars:
             pillar.draw(self.camera_x, self.viewport_width)
+        if self.arrow_rain:
+            self.arrow_rain.draw(self.camera_x)
 
     def draw_gate_masonry(self, left, right, top, *, raised):
         x, width = int(left - self.camera_x), right - left
