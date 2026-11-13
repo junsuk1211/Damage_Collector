@@ -13,7 +13,7 @@ class FirePillar:
     WARNING = 0.85
     RISE = 0.65
     ACTIVE_END = 2.45
-    MAX_HEIGHT = 92
+    MAX_HEIGHT = 52
     HALF_WIDTH = 20
 
     def __init__(self, x, ground_y, delay):
