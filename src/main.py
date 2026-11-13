@@ -49,6 +49,7 @@ def main(frame_limit=None):
         retry_stage = 'chapter1'
         upgrade_screen = None
         next_stage = None
+        used_upgrades = set()
         screen = 'menu'
         previous = perf_counter()
         running, frames = True, 0
@@ -71,6 +72,8 @@ def main(frame_limit=None):
                         if screen == 'gameover' and destination == 'chapter1':
                             destination = retry_stage
                         screen = destination
+                        if screen == 'chapter1':
+                            used_upgrades.clear()
                         if screen in rooms:
                             player = Player(ground_y=TRAINING_GROUND_Y) if screen == 'training' else Player()
                             player.load_image()
@@ -82,6 +85,7 @@ def main(frame_limit=None):
                         screen = next_stage
                         stages[screen].reset()
                         upgrade_screen.apply(stages[screen])
+                        used_upgrades.update(upgrade_screen.cards)
                         player = Player()
                         player.load_image()
                 elif screen in rooms:
@@ -89,7 +93,7 @@ def main(frame_limit=None):
                     if (screen in stages and event.type == pico2d.SDL_KEYDOWN
                             and event.key == pico2d.SDLK_z and room.can_advance(player)):
                         next_stage = room.NEXT_STAGE
-                        upgrade_screen = UpgradeScreen(HEIGHT, room.health, room.MAX_HEALTH)
+                        upgrade_screen = UpgradeScreen(HEIGHT, room.health, room.MAX_HEALTH, used_upgrades)
                         screen = 'upgrades'
                         continue
                     if room.can_start_action(event, player):

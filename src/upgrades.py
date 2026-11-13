@@ -23,30 +23,33 @@ CARDS = {
 
 
 class UpgradeScreen:
-    def __init__(self, height, health, max_health):
+    def __init__(self, height, health, max_health, used=()):
         self.height = height
         self.health = health
         self.max_health = max_health
-        pool = [key for key in CARDS if key != 'blade' or health > 2]
-        self.cards = sample(pool, 2)
-        self.rerolls = [True, True]
+        self.pool = [key for key in CARDS if key not in used and (key != 'blade' or health > 2)]
+        self.cards = sample(self.pool, min(2, len(self.pool)))
+        self.focus = 0
+        self.rerolls = [True] * len(self.cards)
         self.seen = set(self.cards)
         self.title = korean_font(36)
         self.font = korean_font(22)
         self.small = korean_font(18)
 
     def handle_event(self, event):
-        if event.type != p.SDL_MOUSEBUTTONDOWN or event.button != 1:
+        if event.type != p.SDL_KEYDOWN or getattr(event, 'repeat', False):
             return False
-        x, y = event.x, self.height - 1 - event.y
-        for index, left in enumerate((150, 660)):
-            if left + 25 <= x < left + 205 and 254 <= y < 304 and self.rerolls[index]:
-                pool = [key for key in CARDS if key not in self.seen
-                        and (key != 'blade' or self.health > 2)]
-                self.cards[index] = choice(pool)
-                self.seen.add(self.cards[index])
-                self.rerolls[index] = False
-        return 495 <= x < 785 and 136 <= y < 194
+        if event.key == p.SDLK_LEFT:
+            self.focus = 0
+        elif event.key == p.SDLK_RIGHT and self.cards:
+            self.focus = len(self.cards) - 1
+        elif event.key == p.SDLK_r and self.cards and self.rerolls[self.focus]:
+            pool = [key for key in self.pool if key not in self.seen]
+            if pool:
+                self.cards[self.focus] = choice(pool)
+                self.seen.add(self.cards[self.focus])
+                self.rerolls[self.focus] = False
+        return event.key in (p.SDLK_RETURN, p.SDLK_KP_ENTER)
 
     def apply(self, stage):
         stage.upgrades = set(self.cards)
@@ -59,18 +62,22 @@ class UpgradeScreen:
         white = (224, 233, 242)
         fill(0, 0, 1280, self.height, (14, 20, 34))
         self.title.draw(150, 605, '다음 스테이지 강화', gold)
-        self.font.draw(150, 550, f'현재 체력 {self.health}/{self.max_health}   ·   두 카드 모두 적용', white)
-        for index, left in enumerate((150, 660)):
-            key = self.cards[index]
+        self.font.draw(150, 550, f'현재 체력 {self.health}/{self.max_health}   ·   ← → 카드 이동   ·   표시된 강화 모두 적용', white)
+        for index, key in enumerate(self.cards):
+            left = (150, 660)[index]
             title, detail = CARDS[key]
+            if index == self.focus:
+                fill(left - 5, 230, 480, 265, (224, 238, 255))
             fill(left, 235, 470, 255, gold)
             fill(left + 2, 237, 466, 251, (30, 40, 59))
             self.title.draw(left + 25, 425, title, gold)
             self.small.draw(left + 25, 365, detail, white)
-            enabled = self.rerolls[index]
+            enabled = self.rerolls[index] and len(self.seen) < len(self.pool)
             fill(left + 25, 254, 180, 50, (55, 81, 108) if enabled else (48, 53, 66))
-            self.small.draw(left + 45, 279, '리롤 1회' if enabled else '리롤 사용함', white)
+            self.small.draw(left + 45, 279, 'R  리롤 1회' if enabled else '리롤 불가', white)
+        if not self.cards:
+            self.font.draw(150, 420, '남은 증강이 없습니다.', white)
         fill(495, 136, 290, 58, gold)
-        self.font.draw(537, 165, '확정하고 계속', (18, 22, 32))
+        self.font.draw(537, 165, 'Enter  확정', (18, 22, 32))
         self.small.draw(150, 85, '전투 강화는 다음 챕터 동안 적용됩니다.', white)
         self.small.draw(150, 55, '피의 단검은 현재 체력이 3 이상일 때 등장하며, 완전 회복보다 나중에 적용됩니다.', white)
