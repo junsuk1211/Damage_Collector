@@ -23,14 +23,12 @@ class ChapterOne(TrainingCenter):
     FLOOR_Y = 144
     TITLE = '챕터 1  |  성문 경비병'
     NEXT_STAGE = 'chapter2'
-    # 첫 상자를 넘은 뒤 평지 전투, 후반은 석단과 발판을 잇는 위쪽 경로.
+    # 성문 앞의 낮은 석단으로 점프를 익히고, 후반에는 돌기둥 사이의 통로를 건넌다.
     GUARD_POSITIONS = (930, 1950)
-    STONE_PLATFORMS = ((1270, 1408, 193),)
-    SCAFFOLDS = ((1468, 1718, 225), (1785, 1925, 192))
-    BOXES = (
-        (385, 428, 173),     # 작은 상자
-        (1145, 1216, 188),   # 중간 보급 상자
-    )
+    STONE_PLATFORMS = ((445, 513, 176), (1290, 1398, 194))
+    SCAFFOLDS = ((1468, 1688, 223), (1760, 1892, 191))
+    BOXES = ()
+    USE_GATE_MASONRY = True
     FIRE_VENTS = ((1035, 1.2), (2090, 2.3))
 
     @property
@@ -53,9 +51,10 @@ class ChapterOne(TrainingCenter):
         self.viewport_width = width
         path = Path(__file__).resolve().parents[1] / 'assets/characters/chapter1-guard.png'
         self.guard_image = p.load_image(str(path))
-        props_path = path.parents[1] / 'props/chapter1-props.png'
-        self.props = p.load_image(str(props_path))
-        self.crate = p.load_image(str(props_path.with_name('ironbound-crate.png')))
+        if not self.USE_GATE_MASONRY:
+            props_path = path.parents[1] / 'props/chapter1-props.png'
+            self.props = p.load_image(str(props_path))
+            self.crate = p.load_image(str(props_path.with_name('ironbound-crate.png')))
 
     def reset(self):
         super().reset()
@@ -111,6 +110,73 @@ class ChapterOne(TrainingCenter):
             self.cancel_aim()
 
     def draw_props(self):
+        if self.USE_GATE_MASONRY:
+            for left, right, top in self.STONE_PLATFORMS:
+                self.draw_gate_masonry(left, right, top, raised=False)
+            for left, right, top in self.SCAFFOLDS:
+                self.draw_gate_masonry(left, right, top, raised=True)
+        else:
+            self.draw_furniture()
+        if self.NEXT_STAGE:
+            self.draw_exit_marker()
+        for pillar in self.fire_pillars:
+            pillar.draw(self.camera_x, self.viewport_width)
+
+    def draw_gate_masonry(self, left, right, top, *, raised):
+        x, width = int(left - self.camera_x), right - left
+        if x >= self.viewport_width or x + width <= 0:
+            return
+        floor = self.FLOOR_Y
+        shadow = (30, 29, 42)
+        stone = (91, 98, 116)
+        lit_stone = (147, 152, 159)
+        bevel = (57, 62, 81)
+        bronze = (174, 136, 91)
+
+        # 발판 아래는 열린 통로로 보여 줘 아래로도 지나갈 수 있음을 드러낸다.
+        cap_height = 13 if raised else 11
+        cap_bottom = top - cap_height
+        self.draw_prop_shadow(x, width, floor)
+        supports = ((x + 10, 19), (x + width - 29, 19)) if raised else ((x + 4, width - 8),)
+        for base_x, base_width in supports:
+            fill(base_x, floor, base_width, cap_bottom - floor, shadow)
+            for row, y in enumerate(range(floor + 3, cap_bottom, 10)):
+                height = min(8, cap_bottom - y)
+                fill(base_x + 2, y, base_width - 4, height, stone)
+                fill(base_x + base_width - 5, y, 3, height, bevel)
+                fill(base_x + 2, y + height - 1, base_width - 4, 1, lit_stone)
+                if not raised:
+                    seam = base_x + base_width // 2 + (6 if row % 2 else -7)
+                    fill(seam, y, 2, height, shadow)
+                if height >= 5:
+                    nick = base_x + 4 + (row * 7) % (base_width - 10)
+                    fill(nick, y + 2, 4, 1, bevel)
+            if raised:
+                # 돌기둥의 주춧돌과 받침돌이 위쪽 석판의 무게를 받는다.
+                fill(base_x - 3, floor, base_width + 6, 6, bevel)
+                fill(base_x - 3, floor + 5, base_width + 6, 1, lit_stone)
+                fill(base_x - 2, cap_bottom - 5, base_width + 4, 5, bevel)
+                fill(base_x - 2, cap_bottom - 5, base_width + 4, 1, stone)
+
+        fill(x, cap_bottom, width, cap_height, shadow)
+        fill(x + 1, cap_bottom + 2, width - 2, 2, bevel)
+        fill(x + 1, cap_bottom + 4, width - 2, cap_height - 6, (115, 120, 135))
+        for joint in range(x + 27, x + width - 4, 30):
+            fill(joint, cap_bottom + 2, 2, cap_height - 3, (66, 68, 87))
+            fill(joint + 3, cap_bottom + 5, 5, 1, lit_stone)
+        fill(x, top - 2, width, 2, (191, 185, 171))
+        for end in (x + 3, x + width - 8):
+            fill(end, cap_bottom + 2, 5, cap_height - 4, (78, 67, 62))
+            fill(end + 1, top - 6, 2, 2, bronze)
+        if raised:
+            # 성문 깃발의 마름모 문양을 석판 중앙에 작게 새긴다.
+            center = x + width // 2
+            fill(center - 5, cap_bottom + 2, 11, 9, bevel)
+            for offset, span in enumerate((1, 3, 5, 7, 5, 3, 1)):
+                fill(center - span // 2, cap_bottom + 3 + offset, span, 1, bronze)
+            fill(center, cap_bottom + 6, 1, 1, shadow)
+
+    def draw_furniture(self):
         # Image crops use top-left coordinates, while pico2d clips from the bottom.
         stone = (743, 362, 685, 277)
         scaffold = (1464, 252, 694, 392)
@@ -118,8 +184,16 @@ class ChapterOne(TrainingCenter):
             x, width = left - self.camera_x, right - left
             if x < self.viewport_width and x + width > 0:
                 height = top - self.FLOOR_Y
+                self.draw_prop_shadow(x, width, self.FLOOR_Y)
+                fill(x - 2, self.FLOOR_Y, width + 4, height, (25, 19, 24))
                 self.crate.clip_draw(98, self.crate.h - 1100, 1120, 1000,
                                      x + width / 2, self.FLOOR_Y + height / 2, width, height)
+                fill(x, self.FLOOR_Y + 1, 2, height - 3, (171, 108, 59))
+                fill(x + width - 2, self.FLOOR_Y + 1, 2, height - 3, (117, 70, 48))
+                self.draw_prop_edge(x, width, top, (255, 205, 125), (145, 84, 47))
+                for corner in (x + 3, x + width - 7):
+                    fill(corner, top - 13, 4, 7, (178, 121, 68))
+                    fill(corner, top - 10, 2, 2, (255, 224, 157))
         props = [(platform, stone) for platform in self.STONE_PLATFORMS]
         props.extend((platform, scaffold) for platform in self.SCAFFOLDS)
         for (left, right, top), (source_x, source_y, source_width, source_height) in props:
@@ -127,14 +201,26 @@ class ChapterOne(TrainingCenter):
             if x >= self.viewport_width or x + width <= 0:
                 continue
             height = top - self.FLOOR_Y
+            self.draw_prop_shadow(x, width, self.FLOOR_Y)
             self.props.clip_draw(
                 source_x, self.props.h - source_y - source_height, source_width, source_height,
                 x + width / 2, self.FLOOR_Y + height / 2, width, height,
             )
-        if self.NEXT_STAGE:
-            self.draw_exit_marker()
-        for pillar in self.fire_pillars:
-            pillar.draw(self.camera_x, self.viewport_width)
+            if source_x == stone[0]:
+                self.draw_prop_edge(x, width, top, (208, 220, 204), (104, 128, 120))
+            else:
+                self.draw_prop_edge(x, width, top, (244, 189, 116), (135, 82, 54))
+
+    @staticmethod
+    def draw_prop_shadow(x, width, floor):
+        fill(x - 4, floor - 3, width + 8, 4, (22, 18, 29))
+
+    @staticmethod
+    def draw_prop_edge(x, width, top, highlight, face):
+        # 물리 판정의 윗면에 맞춰 밝은 모서리를 그린다.
+        fill(x - 2, top - 8, width + 4, 9, (35, 28, 35))
+        fill(x, top - 6, width, 4, face)
+        fill(x, top - 2, width, 2, highlight)
 
     def draw_exit_marker(self):
         x = self.exit_x - self.camera_x

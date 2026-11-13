@@ -7,6 +7,7 @@ except ImportError:
 
 
 class ChapterTwo(ChapterOne):
+    USE_GATE_MASONRY = False
     TITLE = '챕터 2  |  성 안쪽 통로'
     NEXT_STAGE = None
     GUARD_POSITIONS = (850, 1320, 2140)
