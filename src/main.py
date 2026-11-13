@@ -15,6 +15,7 @@ try:
     from .chapter1 import ChapterOne
     from .chapter2 import ChapterTwo
     from .gameover import GameOverScreen
+    from .upgrades import UpgradeScreen
 except ImportError:
     from player import Player
     from selectscreen import SelectScreen
@@ -23,6 +24,7 @@ except ImportError:
     from chapter1 import ChapterOne
     from chapter2 import ChapterTwo
     from gameover import GameOverScreen
+    from upgrades import UpgradeScreen
 
 
 WIDTH, HEIGHT = 1280, 720
@@ -45,6 +47,8 @@ def main(frame_limit=None):
         stages = {'chapter1': ChapterOne(WIDTH), 'chapter2': ChapterTwo(WIDTH)}
         rooms = {'training': training, **stages}
         retry_stage = 'chapter1'
+        upgrade_screen = None
+        next_stage = None
         screen = 'menu'
         previous = perf_counter()
         running, frames = True, 0
@@ -71,15 +75,22 @@ def main(frame_limit=None):
                             player = Player(ground_y=TRAINING_GROUND_Y) if screen == 'training' else Player()
                             player.load_image()
                             rooms[screen].reset()
+                            if screen == next_stage and upgrade_screen is not None:
+                                upgrade_screen.apply(stages[screen])
+                elif screen == 'upgrades':
+                    if upgrade_screen.handle_event(event):
+                        screen = next_stage
+                        stages[screen].reset()
+                        upgrade_screen.apply(stages[screen])
+                        player = Player()
+                        player.load_image()
                 elif screen in rooms:
                     room = rooms[screen]
                     if (screen in stages and event.type == pico2d.SDL_KEYDOWN
                             and event.key == pico2d.SDLK_z and room.can_advance(player)):
-                        screen = room.NEXT_STAGE
-                        stages[screen].reset()
-                        stages[screen].health = room.health
-                        player = Player()
-                        player.load_image()
+                        next_stage = room.NEXT_STAGE
+                        upgrade_screen = UpgradeScreen(HEIGHT, room.health, room.MAX_HEALTH)
+                        screen = 'upgrades'
                         continue
                     if room.can_start_action(event, player):
                         player.handle_event(event)
@@ -105,6 +116,8 @@ def main(frame_limit=None):
             pico2d.clear_canvas()
             if screen in menus:
                 menus[screen].draw()
+            elif screen == 'upgrades':
+                upgrade_screen.draw()
             elif screen == 'instructions':
                 book.draw(WIDTH, HEIGHT)
             elif screen in rooms:

@@ -79,9 +79,13 @@ class ChapterOne(TrainingCenter):
 
     def aim_arc(self, player):
         arc = super().aim_arc(player)
-        arc.ground_y = max((top for left, right, top in (*self.platforms, *self.solid_obstacles)
-                            if left <= arc.landing_x <= right), default=self.FLOOR_Y) + 8
+        if not arc.straight:
+            arc.ground_y = self.floor_at(arc.landing_x, float('inf')) + 8
         return arc
+
+    def floor_at(self, x, y):
+        return max((top for left, right, top in (*self.platforms, *self.solid_obstacles)
+                    if left <= x <= right and top <= y), default=self.FLOOR_Y)
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
         if not self.health:
@@ -112,8 +116,11 @@ class ChapterOne(TrainingCenter):
         if self.health and not self.hurt_time and not rolling:
             self.health -= 1
             self.hurt_time = 0.65
-            self.stored.clear()
-            self.cancel_aim()
+            if 'shield' in self.upgrades:
+                self.upgrades.remove('shield')
+            else:
+                self.stored.clear()
+                self.cancel_aim()
 
     def draw_props(self):
         if self.USE_GATE_MASONRY:
@@ -270,12 +277,12 @@ class ChapterOne(TrainingCenter):
         for index in range(self.MAX_HEALTH):
             color = (226, 87, 79) if index < self.health else (73, 42, 52)
             fill(310 + index * 26, height - 40, 20, 20, color)
-        held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
+        held = self.held_label()
         remaining = len(self.dummies)
         self.font.draw(465, height - 30, f'보관 {held}    남은 경비병 {remaining}    Esc 시작 화면', (153, 227, 245))
         if not self.dummies:
             if self.NEXT_STAGE:
-                message = '[Z] 다음 스테이지' if self.can_advance(player) else '클리어 · 오른쪽 출구로 이동'
+                message = '[Z] 강화 선택' if self.can_advance(player) else '클리어 · 오른쪽 출구로 이동'
             else:
                 message = '챕터 2 클리어 · [Esc] 시작 화면'
             fill(width - 325, height - 110, 305, 36, (19, 25, 42))

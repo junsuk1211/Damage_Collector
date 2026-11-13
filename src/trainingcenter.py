@@ -1,7 +1,7 @@
 """허수아비와 숫자 회수·투척을 시험하는 훈련장."""
 
-from dataclasses import dataclass
-from math import ceil, cos, sin, tau
+from dataclasses import dataclass, field
+from math import ceil, cos, prod, sin, tau
 from pathlib import Path
 from random import choice, randint
 
@@ -30,9 +30,12 @@ class DroppedNumber:
     value: int
     landing_x: float
     time_left: float = 2.0
+    grounded: bool = False
 
     @property
     def flight_progress(self):
+        if self.grounded:
+            return 1.0
         return min(1.0, (2.0 - self.time_left) / 0.58)
 
     @property
@@ -51,10 +54,11 @@ class ThrowArc:
     y: float
     landing_x: float
     ground_y: float
+    straight: bool = False
 
     def point(self, progress):
         distance = abs(self.landing_x - self.x)
-        lift = 55 + distance * 0.20
+        lift = 0 if self.straight else 55 + distance * 0.20
         x = self.x + (self.landing_x - self.x) * progress
         y = self.y + (self.ground_y - self.y) * progress + 4 * lift * progress * (1 - progress)
         return x, y
@@ -73,6 +77,14 @@ class Burst:
     y: float
     value: int
     age: float = 0.0
+
+
+@dataclass
+class EmberPatch:
+    x: float
+    y: float
+    hit_ids: set = field(default_factory=set)
+    time_left: float = 1.0
 
 
 class TrainingCenter:
@@ -97,6 +109,8 @@ class TrainingCenter:
         self.reset()
 
     def reset(self):
+        self.upgrades = set()
+        self.embers = []
         self.dummies = []
         self.drops = []
         self.stored = []
@@ -107,6 +121,14 @@ class TrainingCenter:
         self.aim_time = None
         self.pending_arc = None
 
+    @property
+    def capacity(self):
+        return 2 if 'multiply' in self.upgrades else self.CAPACITY
+
+    def held_label(self):
+        separator = ' × ' if 'multiply' in self.upgrades else ' + '
+        return separator.join(str(value) for value, _ in self.stored) or '없음'
+
     def cancel_aim(self):
         self.aim_time = None
 
@@ -114,7 +136,9 @@ class TrainingCenter:
         charge = min(1.0, self.aim_time / self.FULL_CHARGE_TIME)
         distance = self.MIN_THROW_RANGE + charge * (self.MAX_THROW_RANGE - self.MIN_THROW_RANGE)
         landing_x = min(self.width - 12, max(12, player.x + player.facing * distance))
-        return ThrowArc(player.x, player.ground_y + player.jump_lift + 54, landing_x, player.ground_y + 8)
+        y = player.ground_y + player.jump_lift + 54
+        straight = 'straight' in self.upgrades
+        return ThrowArc(player.x, y, landing_x, y if straight else player.ground_y + 8, straight)
 
     def handle_event(self, event, player):
         if event.type == p.SDL_KEYUP and event.key == p.SDLK_v:
@@ -140,11 +164,12 @@ class TrainingCenter:
         if self.aim_time is not None:
             return event.key in (p.SDLK_LEFT, p.SDLK_RIGHT, p.SDLK_UP)
         if event.key == p.SDLK_c:
-            return len(self.stored) < self.CAPACITY and self.nearest_drop(player) is not None
+            return len(self.stored) < self.capacity and self.nearest_drop(player) is not None
         return True
 
     def nearest_drop(self, player):
-        nearby = (drop for drop in self.drops if abs(drop.display_x - player.x) <= self.PICKUP_REACH
+        reach = self.PICKUP_REACH * (1.5 if 'reach' in self.upgrades else 1)
+        nearby = (drop for drop in self.drops if abs(drop.display_x - player.x) <= reach
                   and abs(drop.display_y - (player.ground_y + 32)) <= 75)
         return min(nearby, key=lambda drop: abs(drop.display_x - player.x), default=None)
 
@@ -153,6 +178,15 @@ class TrainingCenter:
         dummy.flash = 0.16
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
+        for patch in self.embers:
+            patch.time_left -= dt
+            if patch.time_left > 0:
+                for dummy in self.dummies:
+                    if (dummy.hp > 0 and id(dummy) not in patch.hit_ids
+                            and abs(dummy.x - patch.x) <= 48 and abs(dummy.y - patch.y) <= 36):
+                        self.damage(dummy, 1)
+                        patch.hit_ids.add(id(dummy))
+        self.embers = [patch for patch in self.embers if patch.time_left > 0]
         for burst in self.bursts:
             burst.age += dt
         self.bursts = [burst for burst in self.bursts if burst.age < 0.60]
@@ -177,7 +211,7 @@ class TrainingCenter:
                        and -18 <= (dummy.x - player.x) * player.facing <= self.ATTACK_REACH)
             dummy = min(targets, key=lambda target: abs(target.x - player.x), default=None)
             if dummy is not None:
-                damage = randint(1, 3)
+                damage = 3 if 'blade' in self.upgrades else randint(1, 3)
                 self.damage(dummy, damage)
                 landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
                             if 12 <= dummy.x + offset <= self.width - 12]
@@ -186,7 +220,7 @@ class TrainingCenter:
 
         if player.ground_action is not None and previous_action_time < 0.19 <= player.action_time:
             row, _ = player.ground_action
-            if row == 1 and len(self.stored) < self.CAPACITY:
+            if row == 1 and len(self.stored) < self.capacity:
                 drop = self.nearest_drop(player)
                 if drop is not None:
                     self.drops.remove(drop)
@@ -194,8 +228,11 @@ class TrainingCenter:
                     self.pickup = drop
             elif row == 2 and self.pending_arc is not None:
                 if self.stored:
-                    total = sum(value for value, _ in self.stored)
+                    combine = prod if 'multiply' in self.upgrades else sum
+                    total = combine(value for value, _ in self.stored)
                     self.pending_arc.y = player.ground_y + player.jump_lift + 54
+                    if self.pending_arc.straight:
+                        self.pending_arc.ground_y = self.pending_arc.y
                     self.projectiles.append(Projectile(self.pending_arc, total))
                     self.stored.clear()
                     self.cooldown = self.THROW_COOLDOWN
@@ -225,10 +262,20 @@ class TrainingCenter:
 
     def explode(self, x, y, value):
         self.bursts.append(Burst(x, y, value))
+        hits = set()
         for dummy in self.dummies:
             distance_squared = (dummy.x - x) ** 2 + (dummy.y + 54 - y) ** 2
             if dummy.hp > 0 and distance_squared <= self.BLAST_RADIUS ** 2:
                 self.damage(dummy, value)
+                hits.add(id(dummy))
+        ground = self.floor_at(x, y)
+        if 'embers' in self.upgrades:
+            self.embers.append(EmberPatch(x, ground, hits))
+        if 'refund' in self.upgrades and not hits:
+            self.drops.append(DroppedNumber(x, ground + 16, 1, x, grounded=True))
+
+    def floor_at(self, x, y):
+        return 170
 
     def draw_dummy(self):
         for dummy in self.dummies:
@@ -254,6 +301,10 @@ class TrainingCenter:
                              label, (255, 255, 255))
 
     def draw_number_effects(self, player):
+        for patch in self.embers:
+            for offset in range(-42, 43, 12):
+                height = 4 + int(5 * sin(offset + patch.time_left * 26) ** 2)
+                fill(patch.x - self.camera_x + offset, patch.y, 6, height, (244, 129, 55))
         for drop in self.drops:
             self.font.draw(drop.display_x - self.camera_x - 6, drop.display_y, str(drop.value), (120, 238, 255))
         if self.pickup is not None:
@@ -285,7 +336,7 @@ class TrainingCenter:
         self.draw_number_effects(player)
         fill(0, height - 82, width, 82, (19, 25, 42))
         self.font.draw(24, height - 22, '훈련장  |  I키를 누를 시 허수아비 더미를 생성합니다  |  Esc 시작 화면으로', (255, 230, 177))
-        held = ' + '.join(str(value) for value, _ in self.stored) or '없음'
+        held = self.held_label()
         cooldown = f'{self.cooldown:.1f}초' if self.cooldown else '준비'
         self.font.draw(24, height - 56, f'X 공격   C 회수   V 누르기 조준 / 놓기 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
 
