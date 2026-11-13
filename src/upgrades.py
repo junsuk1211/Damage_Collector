@@ -1,6 +1,6 @@
 """챕터 사이에 고르는 강화 카드와 효과."""
 
-from random import sample, choice
+from random import choice, choices
 
 import pico2d as p
 
@@ -22,13 +22,41 @@ CARDS = {
 }
 
 
+CARD_SYMBOLS = {
+    'heal': '+', 'blade': '/', 'straight': '→', 'multiply': '×',
+    'embers': '✦', 'reach': 'C', 'shield': '◆', 'refund': '1',
+}
+
+RARITIES = (
+    ('일반', 60, (190, 200, 215), ('reach', 'refund', 'straight')),
+    ('희귀', 30, (111, 174, 255), ('blade', 'embers', 'multiply')),
+    ('전설', 10, (255, 207, 109), ('heal', 'shield')),
+)
+CARD_RARITY = {key: (label, color) for label, _, color, keys in RARITIES for key in keys}
+
+
+def draw_card(eligible):
+    groups, weights = [], []
+    for _, weight, _, keys in RARITIES:
+        available = [key for key in keys if key in eligible]
+        if available:
+            groups.append(available)
+            weights.append(weight)
+    return choice(choices(groups, weights=weights)[0])
+
+
 class UpgradeScreen:
     def __init__(self, height, health, max_health, used=()):
         self.height = height
         self.health = health
         self.max_health = max_health
         self.pool = [key for key in CARDS if key not in used and (key != 'blade' or health > 2)]
-        self.cards = sample(self.pool, min(2, len(self.pool)))
+        remaining = self.pool.copy()
+        self.cards = []
+        for _ in range(min(2, len(remaining))):
+            key = draw_card(remaining)
+            self.cards.append(key)
+            remaining.remove(key)
         self.focus = 0
         self.rerolls = [True] * len(self.cards)
         self.seen = set(self.cards)
@@ -46,7 +74,7 @@ class UpgradeScreen:
         elif event.key == p.SDLK_r and self.cards and self.rerolls[self.focus]:
             pool = [key for key in self.pool if key not in self.seen]
             if pool:
-                self.cards[self.focus] = choice(pool)
+                self.cards[self.focus] = draw_card(pool)
                 self.seen.add(self.cards[self.focus])
                 self.rerolls[self.focus] = False
         return event.key in (p.SDLK_RETURN, p.SDLK_KP_ENTER)
@@ -66,11 +94,14 @@ class UpgradeScreen:
         for index, key in enumerate(self.cards):
             left = (150, 660)[index]
             title, detail = CARDS[key]
+            rarity, accent = CARD_RARITY[key]
             if index == self.focus:
                 fill(left - 5, 230, 480, 265, (224, 238, 255))
-            fill(left, 235, 470, 255, gold)
+            fill(left, 235, 470, 255, accent)
             fill(left + 2, 237, 466, 251, (30, 40, 59))
+            self.title.draw(left + 398, 434, CARD_SYMBOLS[key], accent)
             self.title.draw(left + 25, 425, title, gold)
+            self.small.draw(left + 25, 455, rarity, accent)
             self.small.draw(left + 25, 365, detail, white)
             enabled = self.rerolls[index] and len(self.seen) < len(self.pool)
             fill(left + 25, 254, 180, 50, (55, 81, 108) if enabled else (48, 53, 66))
