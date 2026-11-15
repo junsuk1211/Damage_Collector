@@ -12,7 +12,8 @@ except ImportError:
 
 
 ASSET_PATH = Path(__file__).resolve().parents[1] / 'assets' / 'characters' / 'player-motion.png'
-WALK_FRAME_TIME = 0.085
+WALK_PATH = ASSET_PATH.with_name('player-walk.png')
+WALK_FRAMES = 8
 ATTACK_FRAME_ENDS = (0.10, 0.18, 0.28, 0.40)
 ABILITY_PATH = ASSET_PATH.with_name('player-abilities.png')
 NUMBER_MOTION_PATH = ASSET_PATH.with_name('number-motion.png')
@@ -41,7 +42,7 @@ class Player:
         self.image = None
         self.abilities = None
         self.number_motion = None
-        self.walk_time = 0.0
+        self.walk_distance = 0.0
         self.attack_time = None
         self.jump_time = None
         self.ground_action = None
@@ -51,6 +52,7 @@ class Player:
     def load_image(self):
         # 캔버스를 연 다음 호출한다.
         self.image = pico2d.load_image(str(ASSET_PATH))
+        self.walk_image = pico2d.load_image(str(WALK_PATH))
         self.abilities = pico2d.load_image(str(ABILITY_PATH))
         self.number_motion = pico2d.load_image(str(NUMBER_MOTION_PATH))
         self.width = self.height * (self.image.w // 4) / (self.image.h // 2)
@@ -62,10 +64,10 @@ class Player:
             elif self.attack_time is None and self.jump_time is None and self.ground_action is None:
                 if event.key == pico2d.SDLK_x:
                     self.attack_time = 0.0
-                    self.walk_time = 0.0
+                    self.walk_distance = 0.0
                 elif event.key == pico2d.SDLK_UP and not self.fall_speed:
                     self.jump_time = 0.0
-                    self.walk_time = 0.0
+                    self.walk_distance = 0.0
                 elif event.key in GROUND_ACTIONS:
                     self.start_ground_action(event.key)
         elif event.type == pico2d.SDL_KEYUP:
@@ -77,7 +79,7 @@ class Player:
             return False
         self.ground_action = GROUND_ACTIONS[key]
         self.action_time = 0.0
-        self.walk_time = 0.0
+        self.walk_distance = 0.0
         return True
 
     def clear_input(self):
@@ -98,7 +100,7 @@ class Player:
             if self.jump_time >= JUMP_FRAME_ENDS[1] and feet <= support <= previous_feet:
                 self.ground_y = support
                 self.jump_time = None
-                self.walk_time = 0.0
+                self.walk_distance = 0.0
         elif self.ground_y > support:
             self.fall_speed += 900 * dt
             self.ground_y = max(support, self.ground_y - self.fall_speed * dt)
@@ -134,7 +136,8 @@ class Player:
             self.facing = direction
         previous_x = self.x
         self.move_horizontal(direction * self.speed * dt, world_width, boxes)
-        self.walk_time = self.walk_time + dt if self.x != previous_x else 0.0
+        distance = abs(self.x - previous_x)
+        self.walk_distance = self.walk_distance + distance if distance else 0.0
 
     def move_horizontal(self, distance, world_width, boxes=()):
         half_width = min(self.width / 2, world_width / 2)
@@ -183,7 +186,21 @@ class Player:
             frame = bisect_right(JUMP_FRAME_ENDS, self.jump_time)
             self.draw_motion(frame, row=0, ability=True, lift=self.jump_lift)
             return
-        if self.walk_time:
-            self.draw_motion(int(self.walk_time / WALK_FRAME_TIME) % 4, row=0)
+        if self.walk_distance:
+            self.draw_walk()
             return
         self.draw_motion(3, row=1)
+
+    def draw_walk(self):
+        image = self.walk_image
+        cell_width, cell_height = image.w // 4, image.h // 2
+        # 실제 이동 거리에 맞춰 재생해 속도나 프레임 간격이 바뀌어도 보폭을 맞춘다.
+        frame = int(self.walk_distance / (self.height * 0.09)) % WALK_FRAMES
+        row, column = divmod(frame, 4)
+        foot_padding = self.height * (0.098 if row == 0 else 0.093)
+        image.clip_composite_draw(
+            column * cell_width, (1 - row) * cell_height, cell_width, cell_height,
+            0, 'h' if self.facing < 0 else '',
+            self.x - self.camera_x, self.ground_y + self.height / 2 - foot_padding,
+            self.height * cell_width / cell_height, self.height,
+        )

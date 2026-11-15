@@ -26,12 +26,17 @@ class Shieldman(Dummy):
     facing: int = -1
     walk_time: float = 0.0
     attack_age: float | None = None
+    dagger_streak: int = 0
+    dagger_window: float = 0.0
     cooldown: float = 0.0
     obstacle_jump: ObstacleJump | None = None
     fall_speed: float = 0.0
     speed: float = 0.0
 
     def advance(self, dt, player, boxes=(), floor_y=144, platforms=()):
+        self.dagger_window = max(0.0, self.dagger_window - dt)
+        if not self.dagger_window:
+            self.dagger_streak = 0
         self.cooldown = max(0.0, self.cooldown - dt)
         if self.obstacle_jump is not None:
             jump = self.obstacle_jump

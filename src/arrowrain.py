@@ -64,8 +64,10 @@ class ArrowRain:
         fill(center - 21, y - 9, 42, 9, (41, 22, 33))
         fill(center - 19, y - 7, 38, 7, plate)
         fill(center - 19, y - 2, 38, 2, marking)
-        fill(center - 2, y + 5, 4, 10, marking)
-        fill(center - 2, y, 4, 3, marking)
+        fill(center - 7, y + 9, 14, 26, (41, 22, 33))
+        fill(center - 7, y - 2, 14, 11, (41, 22, 33))
+        fill(center - 5, y + 11, 10, 22, marking)
+        fill(center - 5, y, 10, 7, marking)
         if self.elapsed is None or self.spent:
             return
         if self.elapsed < self.WARNING:

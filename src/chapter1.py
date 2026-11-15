@@ -47,7 +47,11 @@ class ChapterOne(TrainingCenter):
         return self.width - 110
 
     def can_advance(self, player):
-        return bool(self.NEXT_STAGE and not self.dummies and player.x >= self.exit_x)
+        return bool(self.NEXT_STAGE and not self.remaining_enemies and player.x >= self.exit_x)
+
+    @property
+    def remaining_enemies(self):
+        return len(self.dummies)
 
     def __init__(self, width):
         super().__init__(width * 2)
@@ -73,9 +77,30 @@ class ChapterOne(TrainingCenter):
 
     def damage(self, dummy, amount):
         super().damage(dummy, amount)
-        if dummy.attack_age is not None:
+        if isinstance(dummy, Shieldman) and dummy.attack_age is not None:
             dummy.attack_age = None
             dummy.cooldown = 0.45
+
+    def dagger_hit(self, dummy, amount, player):
+        self.damage(dummy, amount)
+        if not dummy.hp or not isinstance(dummy, Shieldman):
+            return
+        dummy.dagger_streak += 1
+        dummy.dagger_window = 0.95
+        if dummy.dagger_streak == 4:
+            dummy.dagger_streak = 0
+            dummy.dagger_window = 0.0
+            dummy.flash = 0.0
+            dummy.facing = 1 if player.x >= dummy.x else -1
+            dummy.attack_age = 0.38
+            self.try_guard_hit(dummy, player)
+
+    def try_guard_hit(self, guard, player):
+        distance = (player.x - guard.x) * guard.facing
+        if (abs(player.ground_y + player.jump_lift - guard.y) < 45
+                and stop_at_boxes(guard.x, player.x, guard.y, 0, self.solid_obstacles) == player.x
+                and -12 <= distance <= 87):
+            self.hurt_player(player)
 
     def aim_arc(self, player):
         arc = super().aim_arc(player)
@@ -99,17 +124,15 @@ class ChapterOne(TrainingCenter):
             if pillar.hits(player):
                 self.hurt_player(player)
         for guard in self.dummies:
+            if not isinstance(guard, Shieldman):
+                continue
             if (guard.attack_age is None and guard.obstacle_jump is None
                     and guard.y == self.FLOOR_Y and abs(player.x - guard.x) > 520):
                 guard.walk_time = 0.0
                 guard.speed = 0.0
                 continue
             if guard.advance(dt, player, self.solid_obstacles, self.FLOOR_Y, self.platforms):
-                distance = (player.x - guard.x) * guard.facing
-                if (abs(player.ground_y + player.jump_lift - guard.y) < 45
-                        and stop_at_boxes(guard.x, player.x, guard.y, 0, self.solid_obstacles) == player.x
-                        and -12 <= distance <= 87):
-                    self.hurt_player(player)
+                self.try_guard_hit(guard, player)
 
     def hurt_player(self, player):
         rolling = player.ground_action is not None and player.ground_action[0] == 3
@@ -242,7 +265,7 @@ class ChapterOne(TrainingCenter):
         if x > self.viewport_width + 42:
             return
         y = self.FLOOR_Y
-        ready = not self.dummies
+        ready = not self.remaining_enemies
         border = (255, 210, 112) if ready else (146, 130, 113)
         fill(x + 30, y, 6, 66, (88, 60, 49))
         fill(x - 12, y + 53, 90, 30, border)
@@ -252,6 +275,8 @@ class ChapterOne(TrainingCenter):
     def draw_dummy(self):
         width, height = self.guard_image.w // 4, self.guard_image.h // 2
         for guard in self.dummies:
+            if not isinstance(guard, Shieldman):
+                continue
             column, row = guard.sprite_cell()
             left, right = column * width, (column + 1) * width
             if row == 1 and column in (0, 1):
@@ -278,12 +303,11 @@ class ChapterOne(TrainingCenter):
             color = (226, 87, 79) if index < self.health else (73, 42, 52)
             fill(310 + index * 26, height - 40, 20, 20, color)
         held = self.held_label()
-        remaining = len(self.dummies)
-        self.font.draw(465, height - 30, f'보관 {held}    남은 경비병 {remaining}    Esc 시작 화면', (153, 227, 245))
-        if not self.dummies:
+        self.font.draw(465, height - 30, f'보관 {held}    남은 적 {self.remaining_enemies}    Esc 시작 화면', (153, 227, 245))
+        if not self.remaining_enemies:
             if self.NEXT_STAGE:
                 message = '[Z] 강화 선택' if self.can_advance(player) else '클리어 · 오른쪽 출구로 이동'
             else:
-                message = '챕터 2 클리어 · [Esc] 시작 화면'
+                message = '스테이지 클리어 · [Esc] 시작 화면'
             fill(width - 325, height - 110, 305, 36, (19, 25, 42))
             self.font.draw(width - 311, height - 92, message, (255, 230, 177))

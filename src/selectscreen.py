@@ -2,11 +2,13 @@
 
 import ctypes
 import os
+from collections import OrderedDict
 from pathlib import Path
 
 import pico2d as p
 from pico2d import pico2d as canvas
 from sdl2 import SDL_BUTTON_LEFT, SDL_Rect, SDL_RenderFillRect, SDL_SetRenderDrawColor
+from sdl2 import SDL_SetTextureColorMod
 
 
 def fill(x, y, width, height, color):
@@ -15,9 +17,37 @@ def fill(x, y, width, height, color):
     SDL_RenderFillRect(canvas.renderer, ctypes.byref(rect))
 
 
+class CachedFont:
+    def __init__(self, font):
+        self.font = font
+        self.images = OrderedDict()
+
+    def draw(self, x, y, label, color=(0, 0, 0)):
+        image = self.images.get(label)
+        if image is None:
+            surface = canvas.TTF_RenderUTF8_Blended(
+                self.font.font, label.encode('utf-8'), canvas.SDL_Color(255, 255, 255),
+            )
+            if not surface:
+                return
+            try:
+                texture = canvas.SDL_CreateTextureFromSurface(canvas.renderer, surface)
+            finally:
+                canvas.SDL_FreeSurface(surface)
+            if not texture:
+                return
+            image = self.images[label] = canvas.Image(texture)
+            if len(self.images) > 96:
+                self.images.popitem(last=False)
+        else:
+            self.images.move_to_end(label)
+        SDL_SetTextureColorMod(image.texture, *color)
+        image.draw(x + image.w / 2, y)
+
+
 def korean_font(size):
     path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts/malgun.ttf'
-    return p.load_font(str(path), size)
+    return CachedFont(p.load_font(str(path), size))
 
 
 class SelectScreen:

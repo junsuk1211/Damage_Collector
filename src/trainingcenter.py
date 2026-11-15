@@ -25,18 +25,21 @@ class Dummy:
 
 @dataclass
 class DroppedNumber:
+    FLIGHT_TIME = 0.58
+    GROUND_TIME = 4.0
+
     x: float
     y: float
     value: int
     landing_x: float
-    time_left: float = 2.0
+    time_left: float = FLIGHT_TIME + GROUND_TIME
     grounded: bool = False
 
     @property
     def flight_progress(self):
         if self.grounded:
             return 1.0
-        return min(1.0, (2.0 - self.time_left) / 0.58)
+        return min(1.0, (self.FLIGHT_TIME + self.GROUND_TIME - self.time_left) / self.FLIGHT_TIME)
 
     @property
     def display_x(self):
@@ -97,6 +100,7 @@ class TrainingCenter:
     MAX_THROW_RANGE = 460
     FULL_CHARGE_TIME = 0.95
     BLAST_RADIUS = 103
+    BURST_DURATION = 0.72
 
     def __init__(self, width):
         self.width = width
@@ -177,6 +181,9 @@ class TrainingCenter:
         dummy.hp = max(0, dummy.hp - amount)
         dummy.flash = 0.16
 
+    def dagger_hit(self, dummy, amount, player):
+        self.damage(dummy, amount)
+
     def update(self, dt, player, previous_attack_time, previous_action_time):
         for patch in self.embers:
             patch.time_left -= dt
@@ -189,7 +196,7 @@ class TrainingCenter:
         self.embers = [patch for patch in self.embers if patch.time_left > 0]
         for burst in self.bursts:
             burst.age += dt
-        self.bursts = [burst for burst in self.bursts if burst.age < 0.60]
+        self.bursts = [burst for burst in self.bursts if burst.age < self.BURST_DURATION]
         if player.ground_action is None or player.ground_action[0] != 1:
             self.pickup = None
         self.cooldown = max(0.0, self.cooldown - dt)
@@ -212,7 +219,7 @@ class TrainingCenter:
             dummy = min(targets, key=lambda target: abs(target.x - player.x), default=None)
             if dummy is not None:
                 damage = 3 if 'blade' in self.upgrades else randint(1, 3)
-                self.damage(dummy, damage)
+                self.dagger_hit(dummy, damage, player)
                 landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
                             if 12 <= dummy.x + offset <= self.width - 12]
                 landing_x = choice(landings) if landings else dummy.x
@@ -302,9 +309,7 @@ class TrainingCenter:
 
     def draw_number_effects(self, player):
         for patch in self.embers:
-            for offset in range(-42, 43, 12):
-                height = 4 + int(5 * sin(offset + patch.time_left * 26) ** 2)
-                fill(patch.x - self.camera_x + offset, patch.y, 6, height, (244, 129, 55))
+            self.draw_blue_embers(patch)
         for drop in self.drops:
             self.font.draw(drop.display_x - self.camera_x - 6, drop.display_y, str(drop.value), (120, 238, 255))
         if self.pickup is not None:
@@ -332,6 +337,32 @@ class TrainingCenter:
                 fill(x - self.camera_x - 2, y - 2, 4, 4, (145, 242, 255))
             fill(arc.landing_x - self.camera_x - 13, arc.ground_y - 2, 26, 4, (255, 217, 125))
 
+    def draw_blue_embers(self, patch):
+        x = patch.x - self.camera_x
+        y = patch.y
+        age = 1 - patch.time_left
+        spread = 1 - (1 - min(1, age / 0.24)) ** 3
+        fade = min(1, patch.time_left / 0.32)
+        fill(x - 48 * spread, y, 96 * spread, 3, (24, 70, 144))
+        for index in range(-4, 5):
+            root = x + index * 11 * spread
+            pulse = sin(index * 2.1 + age * 24) ** 2
+            height = int((11 + 19 * pulse) * fade * (1 - abs(index) * 0.10))
+            for row in range(0, height, 3):
+                progress = row / height
+                center = root + 5 * sin(index + age * 17 + progress * 4) * progress
+                width = max(2, int(11 * (1 - progress)))
+                fill(center - width / 2, y + row, width, 3, (43, 100, 236))
+                if progress < 0.78:
+                    fill(center - width / 4, y + row, max(1, width / 2), 3, (94, 210, 255))
+                if progress < 0.32:
+                    fill(center, y + row, 2, 3, (221, 252, 255))
+        for index in range(12):
+            life = (age * 1.9 + index * 0.17) % 1
+            dx = (index - 5.5) * (5 + 3 * life) * spread
+            lift = life * (24 + index % 4 * 7) * fade
+            fill(x + dx, y + lift, 2, 3, (83, int(215 - 105 * life), 255))
+
     def draw_banner(self, width, height, player):
         self.draw_number_effects(player)
         fill(0, height - 82, width, 82, (19, 25, 42))
@@ -341,19 +372,45 @@ class TrainingCenter:
         self.font.draw(24, height - 56, f'X 공격   C 회수   V 누르기 조준 / 놓기 투척     보관 {held}     투척 {cooldown}', (120, 238, 255))
 
     def draw_burst(self, burst):
-        progress = burst.age / 0.60
-        radius = 8 + (self.BLAST_RADIUS - 8) * (1 - (1 - progress) ** 2)
-        fade = 1 - progress
-        if progress < 0.30:
-            size = 20 * (1 - progress / 0.30)
-            fill((burst.x - self.camera_x) - size / 2, burst.y - size / 2, size, size, (228, 252, 255))
-        for index in range(10):
-            angle = tau * index / 10 + 0.12
-            spread = radius * (1.0 if index % 2 == 0 else 0.76)
+        screen_x = burst.x - self.camera_x
+        progress = burst.age / self.BURST_DURATION
+        expansion = 1 - (1 - progress) ** 4
+        radius = 8 + (self.BLAST_RADIUS - 8) * expansion
+        fade = (1 - progress) ** 1.35
+        cyan = (int(85 * fade), int(229 * fade), int(255 * fade))
+
+        # 충격파는 초반에 빠르게 퍼지고 숫자 불꽃보다 먼저 사라진다.
+        if progress < 0.52:
+            ring_fade = (1 - progress / 0.52) ** 0.8
+            ring_color = (int(155 * ring_fade), int(244 * ring_fade), int(255 * ring_fade))
+            for index in range(64):
+                angle = tau * index / 64
+                x = screen_x + cos(angle) * radius
+                y = burst.y + sin(angle) * radius
+                size = 4 if index % 4 else 6
+                fill(x - size / 2, y - size / 2, size, size, ring_color)
+
+        if progress < 0.22:
+            flash = 1 - progress / 0.22
+            size = 14 + 24 * flash
+            x, y = screen_x, burst.y
+            fill(x - size / 2, y - size / 2, size, size, (49, 181, 234))
+            fill(x - size, y - 3, size * 2, 6, (184, 253, 255))
+            fill(x - 3, y - size * 0.72, 6, size * 1.44, (184, 253, 255))
+            fill(x - size / 4, y - size / 4, size / 2, size / 2, (249, 255, 255))
+
+        for index in range(16):
+            angle = tau * index / 16 + 0.12
+            spread = radius * (0.66 + 0.17 * (index % 3))
             dx, dy = cos(angle), sin(angle)
-            x = (burst.x - self.camera_x) + dx * spread
-            y = burst.y + dy * spread - 27 * progress ** 2
-            color = (int(125 * fade), int(235 * fade), int(255 * fade))
-            for trail in (8, 15):
-                fill(x - dx * trail, y - dy * trail, 3, 3, color)
-            self.spark_font.draw(x - 5, y, str(burst.value), color)
+            x = screen_x + dx * spread
+            y = burst.y + dy * spread - 32 * progress ** 2
+            for trail in (8, 14, 20):
+                size = max(1, 5 - trail // 5)
+                fill(x - dx * trail - size / 2, y - dy * trail - size / 2, size, size, cyan)
+            if index % 2:
+                gold = (int(255 * fade), int(211 * fade), int(131 * fade))
+                fill(x - 2, y - 2, 5, 5, gold)
+            else:
+                color = (int(203 * fade), int(249 * fade), int(255 * fade))
+                self.font.draw(x - 7, y, str(burst.value), color)
