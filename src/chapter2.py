@@ -45,7 +45,7 @@ class ChapterTwo(ChapterOne):
         super().update(dt, player, previous_attack_time, previous_action_time)
         if not self.health:
             return
-        if not self.archer_spawned and not self.dummies and player.x >= 1660:
+        if not self.archer_spawned and player.x >= 1660:
             self.dummies.append(Arrowman(2150, self.FLOOR_Y))
             self.archer_spawned = True
         for enemy in self.dummies:
