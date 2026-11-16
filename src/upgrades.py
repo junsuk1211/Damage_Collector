@@ -21,6 +21,10 @@ CARDS = {
     'reach': ('빠른 손', '숫자 회수 범위가 50% 늘어납니다.'),
     'shield': ('깨지는 방패', '첫 피격 때 보관한 숫자를 지킵니다.'),
     'refund': ('되돌아온 숫자', '투척이 빗나가면 폭발 지점에 1이 떨어집니다.'),
+    'linger': ('잔류 숫자', '바닥에 떨어진 숫자가 3초 더 남습니다.'),
+    'recover': ('역전 회수', '피격으로 잃은 숫자 중 가장 큰 1개를 떨어뜨립니다.'),
+    'quick_throw': ('속전속결', '숫자 2개를 던지면 쿨타임이 1.5초입니다.'),
+    'sequence': ('순서의 법칙', '1 → 2 → 3 순서로 모아 던지면 피해가 9입니다.'),
 }
 
 CARD_ICONS = {
@@ -32,12 +36,18 @@ CARD_ICONS = {
     'reach': ('..#....', '..##.#.', '.#####.', '#######', '#######', '.#####.', '..###..'),
     'shield': ('#######', '#..#..#', '#..#..#', '#.##..#', '.#.#.#.', '..#.#..', '...#...'),
     'refund': ('..####.', '.#....#', '#..#...', '#.##...', '#..#..#', '.#.#.#.', '..####.'),
+    'linger': ('.#####.', '..###..', '...#...', '...#...', '..#.#..', '.#####.', '.#####.'),
+    'recover': ('...#...', '..###..', '.#####.', '...#...', '#..#..#', '#.....#', '.#####.'),
+    'quick_throw': ('....##.', '...##..', '..####.', '.####..', '...#...', '..#....', '.#.....'),
+    'sequence': ('......#', '.....##', '....###', '..##...', '..##...', '#......', '#######'),
 }
 
+INCOMPATIBLE = {'multiply': 'sequence', 'sequence': 'multiply'}
+
 RARITIES = (
-    ('일반', 60, (190, 200, 215), ('reach', 'refund', 'straight')),
-    ('희귀', 30, (111, 174, 255), ('blade', 'embers', 'multiply')),
-    ('전설', 10, (255, 207, 109), ('heal', 'shield')),
+    ('일반', 60, (190, 200, 215), ('reach', 'refund', 'straight', 'linger')),
+    ('희귀', 30, (111, 174, 255), ('blade', 'embers', 'multiply', 'recover', 'quick_throw')),
+    ('전설', 10, (255, 207, 109), ('heal', 'shield', 'sequence')),
 )
 CARD_RARITY = {key: (label, color) for label, _, color, keys in RARITIES for key in keys}
 
@@ -60,12 +70,12 @@ class UpgradeScreen:
         self.health = health
         self.max_health = max_health
         self.pool = [key for key in CARDS if key not in used and (key != 'blade' or health > 2)]
-        remaining = self.pool.copy()
         self.cards = []
-        for _ in range(min(2, len(remaining))):
-            key = draw_card(remaining)
-            self.cards.append(key)
-            remaining.remove(key)
+        for _ in range(2):
+            eligible = [key for key in self.pool
+                        if key not in self.cards and INCOMPATIBLE.get(key) not in self.cards]
+            if eligible:
+                self.cards.append(draw_card(eligible))
         self.focus = 0
         self.rerolls = [True] * len(self.cards)
         self.seen = set(self.cards)
@@ -73,6 +83,11 @@ class UpgradeScreen:
         self.title = korean_font(36)
         self.font = korean_font(22)
         self.small = korean_font(18)
+
+    def reroll_pool(self, index):
+        others = self.cards[:index] + self.cards[index + 1:]
+        return [key for key in self.pool
+                if key not in self.seen and INCOMPATIBLE.get(key) not in others]
 
     def handle_event(self, event):
         if event.type != p.SDL_KEYDOWN or getattr(event, 'repeat', False):
@@ -82,7 +97,7 @@ class UpgradeScreen:
         elif event.key == p.SDLK_RIGHT and self.cards:
             self.focus = len(self.cards) - 1
         elif event.key == p.SDLK_r and self.cards and self.rerolls[self.focus]:
-            pool = [key for key in self.pool if key not in self.seen]
+            pool = self.reroll_pool(self.focus)
             if pool:
                 self.cards[self.focus] = draw_card(pool)
                 self.seen.add(self.cards[self.focus])
@@ -128,7 +143,7 @@ class UpgradeScreen:
             self.title.draw(left + 25, 425, title, gold)
             self.small.draw(left + 25, 455, rarity, accent)
             self.small.draw(left + 25, 365, detail, white)
-            enabled = self.rerolls[index] and len(self.seen) < len(self.pool)
+            enabled = self.rerolls[index] and bool(self.reroll_pool(index))
             fill(left + 25, 254, 180, 50, (55, 81, 108) if enabled else (48, 53, 66))
             self.small.draw(left + 45, 279, 'R  리롤 1회' if enabled else '리롤 불가', white)
             start = self.reroll_started[index]

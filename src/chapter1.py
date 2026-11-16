@@ -142,8 +142,7 @@ class ChapterOne(TrainingCenter):
             if 'shield' in self.upgrades:
                 self.upgrades.remove('shield')
             else:
-                self.stored.clear()
-                self.cancel_aim()
+                self.lose_stored_numbers(player)
 
     def draw_props(self):
         if self.USE_GATE_MASONRY:

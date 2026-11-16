@@ -32,14 +32,18 @@ class DroppedNumber:
     y: float
     value: int
     landing_x: float
-    time_left: float = FLIGHT_TIME + GROUND_TIME
     grounded: bool = False
+    ground_time: float = GROUND_TIME
+    time_left: float = field(init=False)
+
+    def __post_init__(self):
+        self.time_left = self.ground_time if self.grounded else self.FLIGHT_TIME + self.ground_time
 
     @property
     def flight_progress(self):
         if self.grounded:
             return 1.0
-        return min(1.0, (self.FLIGHT_TIME + self.GROUND_TIME - self.time_left) / self.FLIGHT_TIME)
+        return min(1.0, (self.FLIGHT_TIME + self.ground_time - self.time_left) / self.FLIGHT_TIME)
 
     @property
     def display_x(self):
@@ -96,6 +100,7 @@ class TrainingCenter:
     CAPACITY = 3
     HOLD_TIME = 12.0
     THROW_COOLDOWN = 2.5
+    QUICK_THROW_COOLDOWN = 1.5
     MIN_THROW_RANGE = 95
     MAX_THROW_RANGE = 460
     FULL_CHARGE_TIME = 0.95
@@ -184,6 +189,24 @@ class TrainingCenter:
     def dagger_hit(self, dummy, amount, player):
         self.damage(dummy, amount)
 
+    def drop_number(self, x, y, value, landing_x, *, grounded=False):
+        ground_time = DroppedNumber.GROUND_TIME + (3 if 'linger' in self.upgrades else 0)
+        self.drops.append(DroppedNumber(x, y, value, landing_x, grounded, ground_time))
+
+    def lose_stored_numbers(self, player):
+        if 'recover' in self.upgrades and self.stored:
+            value = max(value for value, _ in self.stored)
+            self.drop_number(player.x, player.ground_y + 16, value, player.x, grounded=True)
+        self.stored.clear()
+        self.cancel_aim()
+
+    def throw_damage(self, values):
+        if 'multiply' in self.upgrades:
+            return prod(values)
+        if 'sequence' in self.upgrades and values == [1, 2, 3]:
+            return 9
+        return sum(values)
+
     def update(self, dt, player, previous_attack_time, previous_action_time):
         for patch in self.embers:
             patch.time_left -= dt
@@ -223,7 +246,7 @@ class TrainingCenter:
                 landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
                             if 12 <= dummy.x + offset <= self.width - 12]
                 landing_x = choice(landings) if landings else dummy.x
-                self.drops.append(DroppedNumber(dummy.x, dummy.y + 16, damage, landing_x))
+                self.drop_number(dummy.x, dummy.y + 16, damage, landing_x)
 
         if player.ground_action is not None and previous_action_time < 0.19 <= player.action_time:
             row, _ = player.ground_action
@@ -235,14 +258,16 @@ class TrainingCenter:
                     self.pickup = drop
             elif row == 2 and self.pending_arc is not None:
                 if self.stored:
-                    combine = prod if 'multiply' in self.upgrades else sum
-                    total = combine(value for value, _ in self.stored)
+                    values = [value for value, _ in self.stored]
+                    total = self.throw_damage(values)
                     self.pending_arc.y = player.ground_y + player.jump_lift + 54
                     if self.pending_arc.straight:
                         self.pending_arc.ground_y = self.pending_arc.y
                     self.projectiles.append(Projectile(self.pending_arc, total))
                     self.stored.clear()
-                    self.cooldown = self.THROW_COOLDOWN
+                    self.cooldown = (self.QUICK_THROW_COOLDOWN
+                                     if 'quick_throw' in self.upgrades and len(values) == 2
+                                     else self.THROW_COOLDOWN)
                 self.pending_arc = None
 
         self.projectiles = [shot for shot in self.projectiles if self.advance_shot(shot, dt)]
@@ -279,7 +304,7 @@ class TrainingCenter:
         if 'embers' in self.upgrades:
             self.embers.append(EmberPatch(x, ground, hits))
         if 'refund' in self.upgrades and not hits:
-            self.drops.append(DroppedNumber(x, ground + 16, 1, x, grounded=True))
+            self.drop_number(x, ground + 16, 1, x, grounded=True)
 
     def floor_at(self, x, y):
         return 170
