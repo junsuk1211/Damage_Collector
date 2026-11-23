@@ -16,12 +16,12 @@ except ImportError:
 
 
 class ChapterThree(ChapterOne):
-    TITLE = '챕터 3  |  성 내부 초소'
+    TITLE = '챕터 3  |  성벽 순찰로'
     SCREENS_WIDE = 1
     NEXT_STAGE = None
     ARROW_PLATFORM = None
-    GUARD_POSITIONS = ()
-    HEAVY_POSITIONS = (570, 1060)
+    GUARD_POSITIONS = (470, 630)
+    HEAVY_POSITIONS = (1090,)
     STONE_PLATFORMS = ()
     SCAFFOLDS = ()
     FIRE_VENTS = ()
@@ -52,6 +52,10 @@ class ChapterThree(ChapterOne):
             super().dagger_hit(enemy, amount, player)
 
     def advance_guard(self, guard, dt, player):
+        if not isinstance(guard, Verysheidman):
+            super().advance_guard(guard, dt, player)
+            return
+
         if guard.lunge_end is not None or guard.lunge_recovery:
             if guard.advance_lunge(dt, player):
                 self.hurt_player(player, damage=2)

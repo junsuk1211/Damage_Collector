@@ -60,7 +60,7 @@ def main(frame_limit=None):
         backgrounds = {
             'chapter1': pico2d.load_image(str(ROOT / 'assets/backgrounds/training-yard.png')),
             'chapter2': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-corridor.png')),
-            'chapter3': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-checkpoint.png')),
+            'chapter3': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-rampart.png')),
         }
         mountains = pico2d.load_image(str(ROOT / 'assets/backgrounds/mountain-training.png'))
         book = Manual(ROOT / 'assets/backgrounds/underground-library.png')
