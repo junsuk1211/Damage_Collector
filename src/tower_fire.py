@@ -15,6 +15,8 @@ except ImportError:
 
 @dataclass
 class TowerBolt:
+    SPEED = 345
+
     x: float
     y: float
     dx: float
@@ -29,7 +31,7 @@ class TowerBolt:
         return cls(x, y, dx / length, dy / length, (floor - y) * length / dy)
 
     def advance(self, dt, player, hurt_player):
-        reach = min(self.remaining, 530 * dt)
+        reach = min(self.remaining, self.SPEED * dt)
         feet = player.ground_y + player.jump_lift
         rolling = player.ground_action is not None and player.ground_action[0] == 3
         if not rolling and bolt_hit_distance(

@@ -33,6 +33,9 @@ class ChapterThree(ChapterOne):
     FIRE_VENTS = ()
     TOWER_ARCHER_POSITION = (55, 536)
     TOWER_FIRE_END = 570
+    TOWER_SHOTS = 2
+    TOWER_AIM_TIME = 1.15
+    TOWER_RELOAD_TIME = 3.4
 
     def __init__(self, width):
         super().__init__(width)
@@ -48,6 +51,7 @@ class ChapterThree(ChapterOne):
         self.tower_warning = None
         self.tower_bolts = []
         self.tower_active = True
+        self.tower_shots_left = self.TOWER_SHOTS
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
         super().update(dt, player, previous_attack_time, previous_action_time)
@@ -66,16 +70,19 @@ class ChapterThree(ChapterOne):
         if not self.tower_active:
             return
 
-        ready_to_fire = archer.advance(dt, player)
-        if archer.aim and self.tower_warning is None:
-            self.tower_warning = TowerBolt.aimed_at(
-                archer.x + 15 * archer.facing, archer.y + 53, player, self.FLOOR_Y,
-            )
-        if self.tower_warning is not None:
-            archer.facing = -1 if self.tower_warning.dx < 0 else 1
+        if self.tower_shots_left:
+            ready_to_fire = archer.advance(dt, player)
+            if archer.aim and self.tower_warning is None:
+                archer.aim = self.TOWER_AIM_TIME
+                self.tower_warning = TowerBolt.aimed_at(
+                    archer.x + 15 * archer.facing, archer.y + 12, player, self.FLOOR_Y,
+                )
+                archer.facing = -1 if self.tower_warning.dx < 0 else 1
             if ready_to_fire:
                 self.tower_bolts.append(self.tower_warning)
                 self.tower_warning = None
+                self.tower_shots_left -= 1
+                archer.reload = self.TOWER_RELOAD_TIME
         self.tower_bolts = [bolt for bolt in self.tower_bolts
                             if bolt.advance(dt, player, self.hurt_player)]
 
@@ -157,12 +164,13 @@ class ChapterThree(ChapterOne):
 
     def draw_tower_archer(self):
         archer = self.tower_archer
-        cell = self.crossbow_image.w // 3
-        self.crossbow_image.clip_composite_draw(
-            cell * archer.pose, 0, cell, self.crossbow_image.h, 0,
-            'h' if archer.facing > 0 else '', archer.x - self.camera_x, archer.y + 55, 120, 110,
-        )
         if self.tower_warning is not None:
+            # 첫 프레임의 투구와 얼굴만 난간 위에 그린다.
+            self.crossbow_image.clip_composite_draw(
+                300, self.crossbow_image.h - 222, 178, 162, 0,
+                'h' if self.tower_warning.dx >= 0 else '',
+                archer.x - self.camera_x, archer.y + 14, 31, 28,
+            )
             self.tower_warning.draw_warning(self.camera_x)
         for bolt in self.tower_bolts:
             bolt.draw_line(-22, 0, (237, 191, 124), self.camera_x)
