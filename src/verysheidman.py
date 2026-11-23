@@ -32,12 +32,14 @@ class Verysheidman(Shieldman):
     lunge_windup: float = 0.0
     lunge_hit: bool = False
     lunge_recovery: float = 0.0
+    lunge_elapsed: float = 0.0
 
     def prepare_lunge(self, player_x, width):
         self.facing = 1 if player_x >= self.x else -1
         self.lunge_end = max(19, min(width - 19, self.x + self.facing * self.LUNGE_RANGE))
         self.lunge_windup = self.LUNGE_WARNING
         self.lunge_hit = False
+        self.lunge_elapsed = 0.0
 
     def advance_lunge(self, dt, player):
         if self.lunge_recovery > 0:
@@ -48,6 +50,7 @@ class Verysheidman(Shieldman):
             return False
 
         previous_x = self.x
+        self.lunge_elapsed += dt
         self.x += self.facing * min(abs(self.lunge_end - self.x), self.LUNGE_SPEED * dt)
         if abs(self.lunge_end - self.x) < 0.001:
             self.x = self.lunge_end
@@ -87,11 +90,18 @@ class Verysheidman(Shieldman):
             return False
         return super().advance(dt, player, boxes, floor_y, platforms)
 
-    def sprite_cell(self):
-        if self.lunge_windup or self.lunge_recovery:
-            return 2, 1
+    def thrust_frame(self):
+        if self.lunge_windup:
+            return 0 if self.lunge_windup > 0.55 else 1
         if self.lunge_end is not None:
-            return 1, 1
+            if self.lunge_elapsed < 0.10:
+                return 2
+            return 3 if self.lunge_elapsed < 0.44 else 4
+        if self.lunge_recovery:
+            return 4 if self.lunge_recovery > 0.24 else 5
+        return None
+
+    def sprite_cell(self):
         if self.stagger or self.flash:
             return 3, 1
         if self.attack_age is not None:

@@ -30,6 +30,7 @@ class ChapterThree(ChapterOne):
         super().__init__(width)
         path = Path(__file__).resolve().parents[1] / 'assets/characters/chapter3-heavy.png'
         self.heavy_image = p.load_image(str(path))
+        self.thrust_image = p.load_image(str(path.with_name("chapter3-thrust.png")))
 
     def reset(self):
         super().reset()
@@ -73,26 +74,26 @@ class ChapterThree(ChapterOne):
             x = enemy.x - self.camera_x
             if not -85 <= x <= self.viewport_width + 85:
                 continue
-            column, row = enemy.sprite_cell()
-            offset_x, offset_y, angle = 0, 0, 0
-            if enemy.lunge_windup:
-                progress = 1 - enemy.lunge_windup / enemy.LUNGE_WARNING
-                offset_x = -enemy.facing * (3 + 6 * progress)
-                offset_y = -4 * progress
-                angle = -0.10 * enemy.facing * progress
-            elif enemy.lunge_end is not None:
-                offset_x = 7 * enemy.facing
-                offset_y = -4
-                angle = 0.20 * enemy.facing
-            elif enemy.lunge_recovery:
-                progress = enemy.lunge_recovery / enemy.LUNGE_RECOVERY
-                offset_x = 4 * enemy.facing * progress
-                angle = 0.10 * enemy.facing * progress
-            self.heavy_image.clip_composite_draw(
-                column * cell_w, (1 - row) * cell_h, cell_w, cell_h,
-                angle, 'h' if enemy.facing > 0 else '',
-                x + offset_x, enemy.y + 58 + offset_y, 148, 148,
-            )
+            frame = enemy.thrust_frame()
+            flip = 'h' if enemy.facing > 0 else ''
+            if frame is None:
+                column, row = enemy.sprite_cell()
+                # 각 줄에서 장화 밑의 투명 여백을 제외한다.
+                bottom = (1 - row) * cell_h + (35 if row == 0 else 18)
+                height = cell_h - (35 if row == 0 else 18)
+                draw_h = round(148 * height / cell_h)
+                self.heavy_image.clip_composite_draw(
+                    column * cell_w, bottom, cell_w, height, 0, flip,
+                    x, enemy.y + draw_h / 2, 148, draw_h,
+                )
+            else:
+                tile_w, tile_h = self.thrust_image.w // 3, self.thrust_image.h // 2
+                row, col = divmod(frame, 3)
+                # 여섯 자세 모두 장화 밑창이 셀 하단에서 13픽셀 위에 있다.
+                self.thrust_image.clip_composite_draw(
+                    col * tile_w, (1 - row) * tile_h + 13, tile_w, tile_h - 13,
+                    0, flip, x, enemy.y + 64, round(128 * tile_w / (tile_h - 13)), 128,
+                )
             self.draw_target_health(enemy, enemy.y + 131)
             if enemy.barrier:
                 self.draw_barrier(enemy, x)
