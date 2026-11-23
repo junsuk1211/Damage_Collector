@@ -18,6 +18,7 @@ except ImportError:
 @dataclass
 class Dummy:
     MAX_HP = 10
+    DROPS_NUMBERS = True
 
     x: float
     y: float
@@ -248,10 +249,11 @@ class TrainingCenter:
             if dummy is not None:
                 damage = 3 if 'blade' in self.upgrades else randint(1, 3)
                 self.dagger_hit(dummy, damage, player)
-                landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
-                            if 12 <= dummy.x + offset <= self.width - 12]
-                landing_x = choice(landings) if landings else dummy.x
-                self.drop_number(dummy.x, dummy.y + 16, damage, landing_x)
+                if dummy.DROPS_NUMBERS:
+                    landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
+                                if 12 <= dummy.x + offset <= self.width - 12]
+                    landing_x = choice(landings) if landings else dummy.x
+                    self.drop_number(dummy.x, dummy.y + 16, damage, landing_x)
 
         if player.ground_action is not None and previous_action_time < 0.19 <= player.action_time:
             row, _ = player.ground_action

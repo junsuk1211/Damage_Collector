@@ -9,14 +9,21 @@ try:
     from .arrowman import Arrowman
     from .chapter1 import ChapterOne
     from .tower_fire import TowerBolt
+    from .trainingcenter import Dummy
     from .verysheidman import Verysheidman
     from .selectscreen import fill
 except ImportError:
     from arrowman import Arrowman
     from chapter1 import ChapterOne
     from tower_fire import TowerBolt
+    from trainingcenter import Dummy
     from verysheidman import Verysheidman
     from selectscreen import fill
+
+
+class Watchtower(Dummy):
+    MAX_HP = 10
+    DROPS_NUMBERS = False
 
 
 class ChapterThree(ChapterOne):
@@ -39,11 +46,15 @@ class ChapterThree(ChapterOne):
         self.heavy_image = p.load_image(str(path))
         self.thrust_image = p.load_image(str(path.with_name("chapter3-thrust.png")))
         self.crossbow_image = p.load_image(str(path.with_name('chapter2-crossbow.png')))
+        ruined_path = path.parents[1] / 'backgrounds/castle-rampart-ruined.png'
+        self.ruined_rampart = p.load_image(str(ruined_path))
 
     def reset(self):
         super().reset()
         self.dummies.extend(Verysheidman(x, self.FLOOR_Y) for x in self.HEAVY_POSITIONS)
         self.tower_archer = Arrowman(*self.TOWER_ARCHER_POSITION, facing=1, reload=1.1)
+        self.watchtower = Watchtower(53, self.FLOOR_Y)
+        self.dummies.append(self.watchtower)
         self.tower_warning = None
         self.tower_bolts = []
 
@@ -51,9 +62,19 @@ class ChapterThree(ChapterOne):
         super().update(dt, player, previous_attack_time, previous_action_time)
         self.update_tower(dt, player)
 
+    @property
+    def remaining_enemies(self):
+        return sum(enemy is not self.watchtower for enemy in self.dummies)
+
+    def draw_props(self):
+        if not self.watchtower.hp:
+            width, height = self.viewport_width, p.get_canvas_height()
+            self.ruined_rampart.draw(width / 2, height / 2, width, height)
+        super().draw_props()
+
     def update_tower(self, dt, player):
         archer = self.tower_archer
-        if not self.health or not self.remaining_enemies:
+        if not self.watchtower.hp or not self.health or not self.remaining_enemies:
             archer.aim = archer.reload = 0
             self.tower_warning = None
             self.tower_bolts.clear()
@@ -153,6 +174,11 @@ class ChapterThree(ChapterOne):
                 self.spark_font.draw(x - 5, enemy.y + 106, '!', (255, 167 - int(progress * 100), 83))
 
     def draw_tower_archer(self):
+        if not self.watchtower.hp:
+            return
+        if self.remaining_enemies:
+            self.draw_target_health(self.watchtower, self.FLOOR_Y + 125)
+            self.spark_font.draw(27, self.FLOOR_Y + 153, '석궁 성탑', (255, 230, 177))
         archer = self.tower_archer
         # 장전 때 난간 뒤로 숙이고, 조준 때만 석궁을 수평으로 내민다.
         recoil = max(0.0, 1 - (self.TOWER_RELOAD_TIME - archer.reload) / 0.18)
