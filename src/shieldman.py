@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 try:
     from .trainingcenter import Dummy
-    from .terrain import stop_at_boxes
+    from .terrain import melee_path_clear, stop_at_boxes
 except ImportError:
     from trainingcenter import Dummy
-    from terrain import stop_at_boxes
+    from terrain import melee_path_clear, stop_at_boxes
 
 
 @dataclass
@@ -60,8 +60,10 @@ class Shieldman(Dummy):
                 self.cooldown = max(self.cooldown, 0.18)
                 self.speed = 0.0
             return False
-        support = max((top for left, right, top in (*boxes, *platforms)
-                       if left - 19 < self.x < right + 19 and top <= self.y), default=floor_y)
+        ledge = max(((left, right, top) for left, right, top in (*boxes, *platforms)
+                     if left - 19 < self.x < right + 19 and top <= self.y),
+                    key=lambda surface: surface[2], default=None)
+        support = ledge[2] if ledge else floor_y
         if self.y > support:
             self.fall_speed += 850 * dt
             self.y = max(support, self.y - self.fall_speed * dt)
@@ -82,8 +84,18 @@ class Shieldman(Dummy):
                 self.cooldown = self.ATTACK_COOLDOWN
                 return False
             return before < self.ATTACK_HIT_TIME <= self.attack_age
-        offset = player.x - self.x
-        if abs(offset) > 8:
+        player_feet = player.ground_y + player.jump_lift
+        clear = melee_path_clear(self.x, self.y, player.x, player_feet, boxes)
+        target_x = player.x
+        stepping_down = not clear and player_feet < self.y and ledge is not None
+        if stepping_down:
+            left, right, _ = ledge
+            if left <= target_x <= right:
+                target_x = left - 20 if self.x - left < right - self.x else right + 20
+            else:
+                target_x = min(target_x, left - 20) if target_x < left else max(target_x, right + 20)
+        offset = target_x - self.x
+        if abs(offset) > 8 or (stepping_down and offset):
             direction = -1 if offset < 0 else 1
             if direction != self.facing:
                 self.speed = 0.0
@@ -92,10 +104,8 @@ class Shieldman(Dummy):
         boxes = (*boxes, *(platform for platform in platforms
                            if platform[0] <= player.x <= platform[1]
                            and player.ground_y >= platform[2]))
-        blocked = stop_at_boxes(self.x, player.x, self.y, 0, boxes) != player.x
-        different_level = abs(player.ground_y + player.jump_lift - self.y) >= 45
-        if abs(offset) > self.ATTACK_DISTANCE or blocked or different_level:
-            distance = abs(offset) if blocked else max(0.0, abs(offset) - (24 if different_level else self.ATTACK_DISTANCE))
+        if abs(offset) > self.ATTACK_DISTANCE or not clear:
+            distance = abs(offset) if not clear else abs(offset) - self.ATTACK_DISTANCE
             target_speed = min(self.MAX_SPEED, 45 + distance * 4)
             self.speed = min(target_speed, self.speed + 480 * dt)
             next_x = self.x + self.facing * min(self.speed * dt, distance)

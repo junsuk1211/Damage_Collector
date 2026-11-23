@@ -8,14 +8,14 @@ try:
     from .selectscreen import fill
     from .trainingcenter import TrainingCenter
     from .shieldman import Shieldman
-    from .terrain import stop_at_boxes
+    from .terrain import melee_path_clear
     from .firepillar import FirePillar
     from .arrowrain import ArrowRain
 except ImportError:
     from selectscreen import fill
     from trainingcenter import TrainingCenter
     from shieldman import Shieldman
-    from terrain import stop_at_boxes
+    from terrain import melee_path_clear
     from firepillar import FirePillar
     from arrowrain import ArrowRain
 
@@ -98,9 +98,9 @@ class ChapterOne(TrainingCenter):
 
     def try_guard_hit(self, guard, player):
         distance = (player.x - guard.x) * guard.facing
-        if (abs(player.ground_y + player.jump_lift - guard.y) < 45
-                and stop_at_boxes(guard.x, player.x, guard.y, 0, self.solid_obstacles) == player.x
-                and -12 <= distance <= guard.ATTACK_REACH):
+        if (-12 <= distance <= guard.ATTACK_REACH
+                and melee_path_clear(guard.x, guard.y, player.x, player.ground_y + player.jump_lift,
+                                     self.solid_obstacles)):
             self.hurt_player(player)
 
     def aim_arc(self, player):

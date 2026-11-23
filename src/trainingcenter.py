@@ -9,8 +9,10 @@ import pico2d as p
 
 try:
     from .selectscreen import fill, korean_font
+    from .terrain import melee_path_clear
 except ImportError:
     from selectscreen import fill, korean_font
+    from terrain import melee_path_clear
 
 
 @dataclass
@@ -96,6 +98,7 @@ class EmberPatch:
 
 class TrainingCenter:
     ATTACK_REACH = 92
+    solid_obstacles = ()
     PICKUP_REACH = 84
     CAPACITY = 3
     HOLD_TIME = 12.0
@@ -236,9 +239,11 @@ class TrainingCenter:
 
         if (previous_attack_time is not None and player.attack_time is not None
                 and previous_attack_time < 0.10 <= player.attack_time):
+            feet = player.ground_y + player.jump_lift
+            obstacles = self.solid_obstacles
             targets = (dummy for dummy in self.dummies if dummy.hp > 0
-                       and abs(dummy.y - player.ground_y) <= 42
-                       and -18 <= (dummy.x - player.x) * player.facing <= self.ATTACK_REACH)
+                       and -18 <= (dummy.x - player.x) * player.facing <= self.ATTACK_REACH
+                       and melee_path_clear(player.x, feet, dummy.x, dummy.y, obstacles))
             dummy = min(targets, key=lambda target: abs(target.x - player.x), default=None)
             if dummy is not None:
                 damage = 3 if 'blade' in self.upgrades else randint(1, 3)
