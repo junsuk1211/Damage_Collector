@@ -142,6 +142,8 @@ class ChapterOne(TrainingCenter):
         if self.health and not self.hurt_time and not rolling:
             self.health = max(0, self.health - damage)
             self.hurt_time = 0.65
+            if self.audio is not None:
+                self.audio.play_effect('hurt')
             if 'shield' in self.upgrades:
                 self.upgrades.remove('shield')
             else:
@@ -279,6 +281,9 @@ class ChapterOne(TrainingCenter):
         for guard in self.dummies:
             if not isinstance(guard, Shieldman) or not guard.USE_GUARD_SPRITE:
                 continue
+            x = guard.x - self.camera_x
+            if not -64 <= x <= self.viewport_width + 64:
+                continue
             column, row = guard.sprite_cell()
             left, right = column * width, (column + 1) * width
             if row == 1 and column in (0, 1):
@@ -292,7 +297,7 @@ class ChapterOne(TrainingCenter):
             self.guard_image.clip_composite_draw(
                 left, (1 - row) * height, right - left, height,
                 0, 'h' if guard.facing > 0 else '',
-                guard.x - self.camera_x - guard.facing * offset,
+                x - guard.facing * offset,
                 guard.y + 47, 116 * (right - left) / width, 116,
             )
             self.draw_target_health(guard, guard.y + 108)

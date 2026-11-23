@@ -3,17 +3,19 @@
 from pathlib import Path
 
 import pico2d as p
+from pico2d import pico2d as canvas
+from sdl2 import SDL_RenderDrawLine, SDL_SetRenderDrawColor
 
 try:
     from .chapter1 import ChapterOne
-    from .arrowman import Arrowman, Bolt
+    from .arrowman import Arrowman
     from .selectscreen import fill
-    from .terrain import stop_at_boxes
+    from .terrain import bolt_hit_distance
 except ImportError:
     from chapter1 import ChapterOne
-    from arrowman import Arrowman, Bolt
+    from arrowman import Arrowman
     from selectscreen import fill
-    from terrain import stop_at_boxes
+    from terrain import bolt_hit_distance
 
 
 class ChapterTwo(ChapterOne):
@@ -34,51 +36,87 @@ class ChapterTwo(ChapterOne):
 
     def reset(self):
         super().reset()
-        self.archer_spawned = False
+        self.dummies.append(Arrowman(2150, self.FLOOR_Y))
         self.bolts = []
-
-    @property
-    def remaining_enemies(self):
-        return super().remaining_enemies + int(not self.archer_spawned)
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
         super().update(dt, player, previous_attack_time, previous_action_time)
         if not self.health:
             return
-        if not self.archer_spawned and player.x >= 1660:
-            self.dummies.append(Arrowman(2150, self.FLOOR_Y))
-            self.archer_spawned = True
         for enemy in self.dummies:
-            if isinstance(enemy, Arrowman) and enemy.advance(dt, player):
-                self.bolts.append(Bolt(enemy.x + 22 * enemy.facing, enemy.y + 53, enemy.facing))
+            if not isinstance(enemy, Arrowman):
+                continue
+            was_aiming = bool(enemy.aim)
+            if enemy.advance(dt, player):
+                self.bolts.append(enemy.create_bolt())
+            if not was_aiming and enemy.aim and self.audio is not None:
+                self.audio.play_effect('crossbow_draw')
         self.bolts = [bolt for bolt in self.bolts if self.advance_bolt(bolt, dt, player)]
+
+    def bolt_travel_limit(self, bolt, reach):
+        if bolt.dx:
+            wall = self.width if bolt.dx > 0 else 0
+            reach = min(reach, (wall - bolt.x) / bolt.dx)
+        if bolt.dy < 0:
+            reach = min(reach, (self.FLOOR_Y - bolt.y) / bolt.dy)
+        for left, right, top in self.solid_obstacles:
+            hit = bolt_hit_distance(bolt, reach, left, self.FLOOR_Y, right, top)
+            if hit is not None:
+                reach = hit
+        return max(0, reach)
+
+    def draw_bolt_line(self, bolt, start, end, color, thickness):
+        x = bolt.x - self.camera_x
+        y = canvas.get_canvas_height() - 1 - bolt.y
+        x1, x2 = x + start * bolt.dx, x + end * bolt.dx
+        y1, y2 = y - start * bolt.dy, y - end * bolt.dy
+        SDL_SetRenderDrawColor(canvas.renderer, *color, 255)
+        for offset in range(-thickness, thickness + 1):
+            ox, oy = offset * bolt.dy, offset * bolt.dx
+            SDL_RenderDrawLine(canvas.renderer, round(x1 + ox), round(y1 + oy),
+                               round(x2 + ox), round(y2 + oy))
+
+    def draw_bolt_warning(self, bolt):
+        reach = self.bolt_travel_limit(bolt, bolt.remaining)
+        for start in range(0, int(reach), 22):
+            end = min(start + 14, reach)
+            self.draw_bolt_line(bolt, start, end, (100, 18, 31), 2)
+            self.draw_bolt_line(bolt, start, end, (255, 65, 75), 1)
 
     def advance_bolt(self, bolt, dt, player):
         travel = min(bolt.remaining, 530 * dt)
-        next_x = bolt.x + bolt.facing * travel
-        end_x = stop_at_boxes(bolt.x, next_x, bolt.y, 0, self.solid_obstacles)
+        reach = self.bolt_travel_limit(bolt, travel)
         feet = player.ground_y + player.jump_lift
         rolling = player.ground_action is not None and player.ground_action[0] == 3
-        if (not rolling and feet + 6 <= bolt.y <= feet + 75
-                and min(bolt.x, end_x) - 14 <= player.x <= max(bolt.x, end_x) + 14):
+        if not rolling and bolt_hit_distance(
+            bolt, reach, player.x - 14, feet + 6, player.x + 14, feet + 75,
+        ) is not None:
             self.hurt_player(player)
             return False
-        bolt.x = end_x
+        bolt.x += bolt.dx * reach
+        bolt.y += bolt.dy * reach
         bolt.remaining -= travel
-        return end_x == next_x and bolt.remaining > 0 and 0 <= bolt.x <= self.width
+        return reach == travel and bolt.remaining > 0
 
     def draw_dummy(self):
         super().draw_dummy()
         for enemy in self.dummies:
             if isinstance(enemy, Arrowman):
+                if enemy.aim:
+                    self.draw_bolt_warning(enemy.create_bolt())
+                x = enemy.x - self.camera_x
+                if not -64 <= x <= self.viewport_width + 64:
+                    continue
                 cell = self.crossbow.w // 3
                 self.crossbow.clip_composite_draw(
                     cell * enemy.pose, 0, cell, self.crossbow.h,
                     0, 'h' if enemy.facing > 0 else '',
-                    enemy.x - self.camera_x, enemy.y + 55, 120, 110,
+                    x, enemy.y + 55, 120, 110,
                 )
                 self.draw_target_health(enemy, enemy.y + 108)
         for bolt in self.bolts:
             x = bolt.x - self.camera_x
-            fill(min(x, x - 22 * bolt.facing), bolt.y, 22, 2, (209, 159, 103))
+            if not -24 <= x <= self.viewport_width + 24:
+                continue
+            self.draw_bolt_line(bolt, -22, 0, (209, 159, 103), 1)
             fill(x - 2, bolt.y - 1, 4, 4, (248, 223, 174))

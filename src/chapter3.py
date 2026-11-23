@@ -29,7 +29,7 @@ class Watchtower(Dummy):
 class ChapterThree(ChapterOne):
     TITLE = '챕터 3  |  성벽 순찰로'
     SCREENS_WIDE = 1
-    NEXT_STAGE = None
+    NEXT_STAGE = 'chapter4'
     ARROW_PLATFORM = None
     GUARD_POSITIONS = (470, 630)
     HEAVY_POSITIONS = (1090,)
@@ -39,6 +39,7 @@ class ChapterThree(ChapterOne):
     TOWER_ARCHER_POSITION = (85, 545)
     TOWER_AIM_TIME = 1.15
     TOWER_RELOAD_TIME = 3.4
+    TOWER_COLLAPSE_TIME = 1.55
 
     def __init__(self, width):
         super().__init__(width)
@@ -48,6 +49,7 @@ class ChapterThree(ChapterOne):
         self.crossbow_image = p.load_image(str(path.with_name('chapter2-crossbow.png')))
         ruined_path = path.parents[1] / 'backgrounds/castle-rampart-ruined.png'
         self.ruined_rampart = p.load_image(str(ruined_path))
+        self.tower_masonry = p.load_image(str(ruined_path.with_name('castle-rampart-tower.png')))
 
     def reset(self):
         super().reset()
@@ -57,24 +59,78 @@ class ChapterThree(ChapterOne):
         self.dummies.append(self.watchtower)
         self.tower_warning = None
         self.tower_bolts = []
+        self.tower_collapse_age = None
+        self.show_intro = True
+
+    def can_start_action(self, event, player):
+        return not self.show_intro and super().can_start_action(event, player)
+
+    def handle_event(self, event, player):
+        if self.show_intro:
+            if (event.type == p.SDL_KEYDOWN and event.key in (p.SDLK_RETURN, p.SDLK_KP_ENTER)
+                    and not getattr(event, 'repeat', False)):
+                self.show_intro = False
+            return
+        super().handle_event(event, player)
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
-        super().update(dt, player, previous_attack_time, previous_action_time)
-        self.update_tower(dt, player)
+        if not self.show_intro:
+            super().update(dt, player, previous_attack_time, previous_action_time)
+            self.update_tower(dt, player)
+            if self.tower_collapse_age is not None:
+                self.tower_collapse_age += dt
 
     @property
     def remaining_enemies(self):
-        return sum(enemy is not self.watchtower for enemy in self.dummies)
+        return sum(enemy.hp > 0 for enemy in self.dummies)
 
     def draw_props(self):
         if not self.watchtower.hp:
             width, height = self.viewport_width, p.get_canvas_height()
             self.ruined_rampart.draw(width / 2, height / 2, width, height)
+            if self.tower_collapse_age is not None and self.tower_collapse_age < self.TOWER_COLLAPSE_TIME:
+                self.draw_tower_collapse(width, height)
         super().draw_props()
+
+    def draw_tower_collapse(self, width, height):
+        age = self.tower_collapse_age
+        stone = self.tower_masonry
+        scale_x, scale_y = width / 1672, height / 941
+        for bottom, section_height, speed, drift in (
+            (0, 154, 360, 16), (154, 172, 325, 42), (326, 202, 290, 68),
+        ):
+            drop = int(speed * age ** 2 / scale_y)
+            hidden = max(0, drop - bottom)
+            visible = section_height - hidden
+            if visible > 0:
+                y = self.FLOOR_Y + (bottom - drop + hidden + visible / 2) * scale_y
+                x = stone.w * scale_x / 2 + drift * age ** 2
+                stone.clip_draw(0, bottom + hidden, stone.w, visible, x, y,
+                                stone.w * scale_x, visible * scale_y)
+
+        for index in range(28):
+            elapsed = age - (index % 7) * 0.065
+            if not 0 <= elapsed < 0.95:
+                continue
+            x = 8 + index * 27 % 100 + elapsed * (40 + index % 8 * 18)
+            lift = elapsed * (84 + index % 6 * 37) - 240 * elapsed ** 2
+            size = max(2, int((6 + index % 9) * (1 - elapsed)))
+            shade = 55 + index % 5 * 8
+            fill(x, self.FLOOR_Y + max(0, lift) + 5, size, size, (shade, shade, shade + 9))
+
+        for index in range(48):
+            elapsed = age - (index % 8) * 0.085
+            if not 0 <= elapsed < 0.9:
+                continue
+            x = index * 29 % 88 + elapsed * (35 + index % 9 * 22)
+            y = self.FLOOR_Y + 7 + index * 13 % 37 + elapsed * (14 + index % 6 * 12)
+            size = max(1, int((4 + index % 4) * (1 - elapsed)))
+            shade = 54 + index % 4 * 7
+            fill(x, y, size, size, (shade, shade + 3, shade + 12))
 
     def update_tower(self, dt, player):
         archer = self.tower_archer
-        if not self.watchtower.hp or not self.health or not self.remaining_enemies:
+        if not self.watchtower.hp or not self.health:
             archer.aim = archer.reload = 0
             self.tower_warning = None
             self.tower_bolts.clear()
@@ -94,14 +150,37 @@ class ChapterThree(ChapterOne):
                 self.tower_warning = TowerBolt.aimed_at(
                     archer.x + 37 * archer.facing, archer.y + 6, player, self.FLOOR_Y,
                 )
+                if self.audio is not None:
+                    self.audio.play_effect('crossbow_draw')
         self.tower_bolts = [bolt for bolt in self.tower_bolts
                             if bolt.advance(dt, player, self.hurt_player)]
+
+    def draw_banner(self, width, height, player):
+        super().draw_banner(width, height, player)
+        if not self.show_intro:
+            return
+
+        left, bottom = (width - 660) // 2, (height - 292) // 2
+        fill(left, bottom, 660, 292, (79, 188, 233))
+        fill(left + 2, bottom + 2, 656, 288, (19, 25, 42))
+        self.font.draw(left + 30, bottom + 251, '챕터 3   중갑병의 방벽', (255, 230, 177))
+        self.font.draw(left + 30, bottom + 207, '방벽이 남아 있으면 단검으로 체력을 깎을 수 없어.', (224, 233, 242))
+        self.font.draw(left + 30, bottom + 170, '[X] 적을 때려 숫자를 떨어뜨리고 [C]로 주워.', (224, 233, 242))
+        self.font.draw(left + 30, bottom + 133, '[V]를 눌러 조준하고 떼면 숫자를 던져 방벽을 깎아.', (224, 233, 242))
+        self.font.draw(left + 30, bottom + 96, '방벽을 깨면 중갑병이 비틀거려. 그때 단검으로 공격해!', (133, 242, 255))
+        self.spark_font.draw(left + 30, bottom + 65, '왼쪽 석궁 성탑도 부숴야 오른쪽 출구가 열려.', (255, 230, 177))
+        self.font.draw(left + 30, bottom + 38, '[Enter] 전투 시작', (255, 230, 177))
 
     def damage(self, enemy, amount):
         if isinstance(enemy, Verysheidman):
             enemy.take_number_damage(amount)
         else:
+            tower_was_standing = enemy is self.watchtower and enemy.hp > 0
             super().damage(enemy, amount)
+            if tower_was_standing and not enemy.hp:
+                self.tower_collapse_age = 0.0
+                if self.audio is not None:
+                    self.audio.play_effect('tower_collapse')
 
     def dagger_hit(self, enemy, amount, player):
         if isinstance(enemy, Verysheidman):
@@ -126,6 +205,8 @@ class ChapterThree(ChapterOne):
             guard.advance(dt, player)
             if not guard.stagger:
                 guard.prepare_lunge(player.x, self.width)
+                if self.audio is not None:
+                    self.audio.play_effect('heavy_inhale')
             return
 
         super().advance_guard(guard, dt, player)
@@ -176,9 +257,8 @@ class ChapterThree(ChapterOne):
     def draw_tower_archer(self):
         if not self.watchtower.hp:
             return
-        if self.remaining_enemies:
-            self.draw_target_health(self.watchtower, self.FLOOR_Y + 125)
-            self.spark_font.draw(27, self.FLOOR_Y + 153, '석궁 성탑', (255, 230, 177))
+        self.draw_target_health(self.watchtower, self.FLOOR_Y + 125)
+        self.spark_font.draw(27, self.FLOOR_Y + 153, '석궁 성탑', (255, 230, 177))
         archer = self.tower_archer
         # 장전 때 난간 뒤로 숙이고, 조준 때만 석궁을 수평으로 내민다.
         recoil = max(0.0, 1 - (self.TOWER_RELOAD_TIME - archer.reload) / 0.18)
@@ -201,7 +281,7 @@ class ChapterThree(ChapterOne):
         if self.tower_warning is not None:
             self.tower_warning.draw_warning(self.camera_x)
         for bolt in self.tower_bolts:
-            bolt.draw_line(-22, 0, (237, 191, 124), self.camera_x)
+            bolt.draw(self.camera_x)
 
     def draw_lunge_warning(self, enemy, x):
         tip = enemy.lunge_end + enemy.facing * enemy.LUNGE_BLADE_REACH - self.camera_x

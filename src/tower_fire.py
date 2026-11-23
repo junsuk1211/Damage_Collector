@@ -8,8 +8,10 @@ from sdl2 import SDL_RenderDrawLine, SDL_SetRenderDrawColor
 
 
 try:
+    from .selectscreen import fill
     from .terrain import bolt_hit_distance
 except ImportError:
+    from selectscreen import fill
     from terrain import bolt_hit_distance
 
 
@@ -55,6 +57,10 @@ class TowerBolt:
                 round(x + start * self.dx + ox), round(y - start * self.dy + oy),
                 round(x + end * self.dx + ox), round(y - end * self.dy + oy),
             )
+
+    def draw(self, camera_x):
+        self.draw_line(-22, 0, (209, 159, 103), camera_x)
+        fill(self.x - camera_x - 2, self.y - 1, 4, 4, (248, 223, 174))
 
     def draw_warning(self, camera_x):
         for start in range(0, int(self.remaining), 22):

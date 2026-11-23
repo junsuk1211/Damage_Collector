@@ -113,6 +113,7 @@ class TrainingCenter:
 
     def __init__(self, width):
         self.width = width
+        self.audio = None
         self.viewport_width = width
         self.camera_x = 0.0
         self.font = korean_font(22)
@@ -249,6 +250,8 @@ class TrainingCenter:
             if dummy is not None:
                 damage = 3 if 'blade' in self.upgrades else randint(1, 3)
                 self.dagger_hit(dummy, damage, player)
+                if self.audio is not None:
+                    self.audio.play_effect('hit')
                 if dummy.DROPS_NUMBERS:
                     landings = [dummy.x + offset for offset in (-randint(28, 62), randint(28, 62))
                                 if 12 <= dummy.x + offset <= self.width - 12]
@@ -263,6 +266,8 @@ class TrainingCenter:
                     self.drops.remove(drop)
                     self.stored.append((drop.value, self.HOLD_TIME))
                     self.pickup = drop
+                    if self.audio is not None:
+                        self.audio.play_effect('pickup')
             elif row == 2 and self.pending_arc is not None:
                 if self.stored:
                     values = [value for value, _ in self.stored]
@@ -307,6 +312,8 @@ class TrainingCenter:
             if dummy.hp > 0 and distance_squared <= self.BLAST_RADIUS ** 2:
                 self.damage(dummy, value)
                 hits.add(id(dummy))
+        if self.audio is not None:
+            self.audio.play_effect('burst' if hits else 'burst_miss')
         ground = self.floor_at(x, y)
         if 'embers' in self.upgrades:
             self.embers.append(EmberPatch(x, ground, hits))

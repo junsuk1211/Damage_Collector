@@ -28,8 +28,10 @@ try:
     from .chapter1 import ChapterOne
     from .chapter2 import ChapterTwo
     from .chapter3 import ChapterThree
+    from .chapter4 import ChapterFour
     from .gameover import GameOverScreen
     from .upgrades import UpgradeScreen
+    from .game_audio import GameAudio
 except ImportError:
     from player import Player
     from selectscreen import SelectScreen
@@ -38,8 +40,10 @@ except ImportError:
     from chapter1 import ChapterOne
     from chapter2 import ChapterTwo
     from chapter3 import ChapterThree
+    from chapter4 import ChapterFour
     from gameover import GameOverScreen
     from upgrades import UpgradeScreen
+    from game_audio import GameAudio
 
 
 WIDTH, HEIGHT = 1280, 720
@@ -48,9 +52,6 @@ TRAINING_GROUND_Y = 170
 
 
 def main(frame_limit=None):
-    # 게임에서 소리를 재생하지 않으므로 Windows 오디오 장치를 열지 않는다.
-    if sys.platform == 'win32':
-        os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
     if startup_log:
         startup_log.write('Opening SDL window\n')
     pico2d.open_canvas(WIDTH, HEIGHT)
@@ -61,6 +62,7 @@ def main(frame_limit=None):
             'chapter1': pico2d.load_image(str(ROOT / 'assets/backgrounds/training-yard.png')),
             'chapter2': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-corridor.png')),
             'chapter3': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-rampart.png')),
+            'chapter4': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-checkpoint.png')),
         }
         mountains = pico2d.load_image(str(ROOT / 'assets/backgrounds/mountain-training.png'))
         book = Manual(ROOT / 'assets/backgrounds/underground-library.png')
@@ -71,8 +73,11 @@ def main(frame_limit=None):
         menus = {'menu': menu, 'gameover': game_over}
         training = TrainingCenter(WIDTH)
         stages = {'chapter1': ChapterOne(WIDTH), 'chapter2': ChapterTwo(WIDTH),
-                  'chapter3': ChapterThree(WIDTH)}
+                  'chapter3': ChapterThree(WIDTH), 'chapter4': ChapterFour(WIDTH)}
         rooms = {'training': training, **stages}
+        audio = GameAudio()
+        for room in rooms.values():
+            room.audio = audio
         retry_stage = 'chapter1'
         upgrade_screen = None
         next_stage = None
@@ -120,11 +125,13 @@ def main(frame_limit=None):
                     if (screen in stages and event.type == pico2d.SDL_KEYDOWN
                             and event.key == pico2d.SDLK_z and room.can_advance(player)):
                         next_stage = room.NEXT_STAGE
-                        upgrade_screen = UpgradeScreen(HEIGHT, room.health, room.MAX_HEALTH, used_upgrades)
+                        upgrade_screen = UpgradeScreen(HEIGHT, room.health, room.MAX_HEALTH, used_upgrades, audio=audio)
                         screen = 'upgrades'
                         continue
                     if room.can_start_action(event, player):
-                        player.handle_event(event)
+                        effect = player.handle_event(event)
+                        if effect is not None:
+                            audio.play_effect(effect)
                     room.handle_event(event, player)
             # 다른 창으로 전환할 때 키 해제 이벤트를 놓쳐도 계속 걷지 않는다.
             if not SDL_GetKeyboardFocus():
@@ -144,6 +151,7 @@ def main(frame_limit=None):
                 if screen in stages and not room.health:
                     retry_stage = screen
                     screen = 'gameover'
+            audio.play_screen(screen)
             pico2d.clear_canvas()
             if screen in menus:
                 menus[screen].draw()

@@ -50,6 +50,7 @@ RARITIES = (
     ('전설', 10, (255, 207, 109), ('heal', 'shield', 'sequence')),
 )
 CARD_RARITY = {key: (label, color) for label, _, color, keys in RARITIES for key in keys}
+REROLL_EFFECT = {'일반': 'reroll_common', '희귀': 'reroll_rare', '전설': 'reroll_legendary'}
 
 
 def draw_card(eligible):
@@ -65,10 +66,11 @@ def draw_card(eligible):
 class UpgradeScreen:
     REVEAL_TIME = 0.72
 
-    def __init__(self, height, health, max_health, used=()):
+    def __init__(self, height, health, max_health, used=(), *, audio=None):
         self.height = height
         self.health = health
         self.max_health = max_health
+        self.audio = audio
         self.pool = [key for key in CARDS if key not in used and (key != 'blade' or health > 2)]
         self.cards = []
         for _ in range(2):
@@ -92,6 +94,7 @@ class UpgradeScreen:
     def handle_event(self, event):
         if event.type != p.SDL_KEYDOWN or getattr(event, 'repeat', False):
             return False
+        previous_focus = self.focus
         if event.key == p.SDLK_LEFT:
             self.focus = 0
         elif event.key == p.SDLK_RIGHT and self.cards:
@@ -99,11 +102,20 @@ class UpgradeScreen:
         elif event.key == p.SDLK_r and self.cards and self.rerolls[self.focus]:
             pool = self.reroll_pool(self.focus)
             if pool:
-                self.cards[self.focus] = draw_card(pool)
-                self.seen.add(self.cards[self.focus])
+                card = draw_card(pool)
+                self.cards[self.focus] = card
+                self.seen.add(card)
                 self.rerolls[self.focus] = False
                 self.reroll_started[self.focus] = perf_counter()
-        return event.key in (p.SDLK_RETURN, p.SDLK_KP_ENTER) and not self.is_revealing()
+                if self.audio is not None:
+                    rarity, _ = CARD_RARITY[card]
+                    self.audio.play_effect(REROLL_EFFECT[rarity])
+        if self.focus != previous_focus and self.audio is not None:
+            self.audio.play_effect('card_move')
+        confirmed = event.key in (p.SDLK_RETURN, p.SDLK_KP_ENTER) and not self.is_revealing()
+        if confirmed and self.audio is not None:
+            self.audio.play_effect('card_confirm')
+        return confirmed
 
     def is_revealing(self):
         now = perf_counter()

@@ -68,8 +68,10 @@ class Player:
                 elif event.key == pico2d.SDLK_UP and not self.fall_speed:
                     self.jump_time = 0.0
                     self.walk_distance = 0.0
+                    return 'jump'
                 elif event.key in GROUND_ACTIONS:
-                    self.start_ground_action(event.key)
+                    if self.start_ground_action(event.key) and event.key == pico2d.SDLK_LSHIFT:
+                        return 'roll'
         elif event.type == pico2d.SDL_KEYUP:
             self._pressed.discard(event.key)
 
