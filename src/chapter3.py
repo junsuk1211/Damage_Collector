@@ -31,9 +31,8 @@ class ChapterThree(ChapterOne):
     STONE_PLATFORMS = ()
     SCAFFOLDS = ()
     FIRE_VENTS = ()
-    TOWER_ARCHER_POSITION = (55, 536)
+    TOWER_ARCHER_POSITION = (85, 545)
     TOWER_FIRE_END = 570
-    TOWER_SHOTS = 2
     TOWER_AIM_TIME = 1.15
     TOWER_RELOAD_TIME = 3.4
 
@@ -51,7 +50,6 @@ class ChapterThree(ChapterOne):
         self.tower_warning = None
         self.tower_bolts = []
         self.tower_active = True
-        self.tower_shots_left = self.TOWER_SHOTS
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
         super().update(dt, player, previous_attack_time, previous_action_time)
@@ -70,19 +68,17 @@ class ChapterThree(ChapterOne):
         if not self.tower_active:
             return
 
-        if self.tower_shots_left:
-            ready_to_fire = archer.advance(dt, player)
-            if archer.aim and self.tower_warning is None:
-                archer.aim = self.TOWER_AIM_TIME
-                self.tower_warning = TowerBolt.aimed_at(
-                    archer.x + 15 * archer.facing, archer.y + 12, player, self.FLOOR_Y,
-                )
-                archer.facing = -1 if self.tower_warning.dx < 0 else 1
-            if ready_to_fire:
-                self.tower_bolts.append(self.tower_warning)
-                self.tower_warning = None
-                self.tower_shots_left -= 1
-                archer.reload = self.TOWER_RELOAD_TIME
+        ready_to_fire = archer.advance(dt, player)
+        if archer.aim and self.tower_warning is None:
+            archer.aim = self.TOWER_AIM_TIME
+            self.tower_warning = TowerBolt.aimed_at(
+                archer.x + 37, archer.y + 6, player, self.FLOOR_Y,
+            )
+            archer.facing = -1 if self.tower_warning.dx < 0 else 1
+        if ready_to_fire:
+            self.tower_bolts.append(self.tower_warning)
+            self.tower_warning = None
+            archer.reload = self.TOWER_RELOAD_TIME
         self.tower_bolts = [bolt for bolt in self.tower_bolts
                             if bolt.advance(dt, player, self.hurt_player)]
 
@@ -164,13 +160,12 @@ class ChapterThree(ChapterOne):
 
     def draw_tower_archer(self):
         archer = self.tower_archer
+        # 조준 자세의 투구와 수평 석궁만 성가퀴 위로 내민다.
+        self.crossbow_image.clip_composite_draw(
+            772, self.crossbow_image.h - 268, 442, 190, 0, 'h',
+            archer.x - self.camera_x, archer.y + 16, 76, 32,
+        )
         if self.tower_warning is not None:
-            # 첫 프레임의 투구와 얼굴만 난간 위에 그린다.
-            self.crossbow_image.clip_composite_draw(
-                300, self.crossbow_image.h - 222, 178, 162, 0,
-                'h' if self.tower_warning.dx >= 0 else '',
-                archer.x - self.camera_x, archer.y + 14, 31, 28,
-            )
             self.tower_warning.draw_warning(self.camera_x)
         for bolt in self.tower_bolts:
             bolt.draw_line(-22, 0, (237, 191, 124), self.camera_x)
