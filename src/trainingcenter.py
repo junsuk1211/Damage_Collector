@@ -304,7 +304,7 @@ class TrainingCenter:
             return False
         return True
 
-    def explode(self, x, y, value):
+    def explode(self, x, y, value, *, hit_environment=False):
         self.bursts.append(Burst(x, y, value))
         hits = set()
         for dummy in self.dummies:
@@ -313,11 +313,11 @@ class TrainingCenter:
                 self.damage(dummy, value)
                 hits.add(id(dummy))
         if self.audio is not None:
-            self.audio.play_effect('burst' if hits else 'burst_miss')
+            self.audio.play_effect('burst' if hits or hit_environment else 'burst_miss')
         ground = self.floor_at(x, y)
         if 'embers' in self.upgrades:
             self.embers.append(EmberPatch(x, ground, hits))
-        if 'refund' in self.upgrades and not hits:
+        if 'refund' in self.upgrades and not (hits or hit_environment):
             self.drop_number(x, ground + 16, 1, x, grounded=True)
 
     def floor_at(self, x, y):
