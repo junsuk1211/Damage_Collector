@@ -6,11 +6,17 @@ from math import sin
 import pico2d as p
 
 try:
+    from .arrowman import Arrowman
     from .chapter1 import ChapterOne
+    from .shieldman import Shieldman
+    from .tower_fire import TowerBolt
     from .verysheidman import Verysheidman
     from .selectscreen import fill
 except ImportError:
+    from arrowman import Arrowman
     from chapter1 import ChapterOne
+    from shieldman import Shieldman
+    from tower_fire import TowerBolt
     from verysheidman import Verysheidman
     from selectscreen import fill
 
@@ -25,16 +31,53 @@ class ChapterThree(ChapterOne):
     STONE_PLATFORMS = ()
     SCAFFOLDS = ()
     FIRE_VENTS = ()
+    TOWER_ARCHER_POSITION = (55, 536)
+    TOWER_FIRE_END = 570
 
     def __init__(self, width):
         super().__init__(width)
         path = Path(__file__).resolve().parents[1] / 'assets/characters/chapter3-heavy.png'
         self.heavy_image = p.load_image(str(path))
         self.thrust_image = p.load_image(str(path.with_name("chapter3-thrust.png")))
+        self.crossbow_image = p.load_image(str(path.with_name('chapter2-crossbow.png')))
 
     def reset(self):
         super().reset()
         self.dummies.extend(Verysheidman(x, self.FLOOR_Y) for x in self.HEAVY_POSITIONS)
+        self.tower_archer = Arrowman(*self.TOWER_ARCHER_POSITION, facing=1, reload=1.1)
+        self.tower_warning = None
+        self.tower_bolts = []
+        self.tower_active = True
+
+    def update(self, dt, player, previous_attack_time, previous_action_time):
+        super().update(dt, player, previous_attack_time, previous_action_time)
+        self.update_tower(dt, player)
+
+    def update_tower(self, dt, player):
+        archer = self.tower_archer
+        if not self.health or player.x >= self.TOWER_FIRE_END or not any(
+            type(enemy) is Shieldman for enemy in self.dummies
+        ):
+            self.tower_active = False
+            archer.aim = archer.reload = 0
+            self.tower_warning = None
+            self.tower_bolts.clear()
+            return
+        if not self.tower_active:
+            return
+
+        ready_to_fire = archer.advance(dt, player)
+        if archer.aim and self.tower_warning is None:
+            self.tower_warning = TowerBolt.aimed_at(
+                archer.x + 15 * archer.facing, archer.y + 53, player, self.FLOOR_Y,
+            )
+        if self.tower_warning is not None:
+            archer.facing = -1 if self.tower_warning.dx < 0 else 1
+            if ready_to_fire:
+                self.tower_bolts.append(self.tower_warning)
+                self.tower_warning = None
+        self.tower_bolts = [bolt for bolt in self.tower_bolts
+                            if bolt.advance(dt, player, self.hurt_player)]
 
     def damage(self, enemy, amount):
         if isinstance(enemy, Verysheidman):
@@ -71,6 +114,7 @@ class ChapterThree(ChapterOne):
 
     def draw_dummy(self):
         super().draw_dummy()
+        self.draw_tower_archer()
         cell_w, cell_h = self.heavy_image.w // 4, self.heavy_image.h // 2
         for enemy in self.dummies:
             if not isinstance(enemy, Verysheidman):
@@ -110,6 +154,18 @@ class ChapterThree(ChapterOne):
                 left = x if enemy.facing > 0 else x - enemy.ATTACK_REACH
                 fill(left, enemy.y + 1, enemy.ATTACK_REACH, 4, (248, 81, 64))
                 self.spark_font.draw(x - 5, enemy.y + 106, '!', (255, 167 - int(progress * 100), 83))
+
+    def draw_tower_archer(self):
+        archer = self.tower_archer
+        cell = self.crossbow_image.w // 3
+        self.crossbow_image.clip_composite_draw(
+            cell * archer.pose, 0, cell, self.crossbow_image.h, 0,
+            'h' if archer.facing > 0 else '', archer.x - self.camera_x, archer.y + 55, 120, 110,
+        )
+        if self.tower_warning is not None:
+            self.tower_warning.draw_warning(self.camera_x)
+        for bolt in self.tower_bolts:
+            bolt.draw_line(-22, 0, (237, 191, 124), self.camera_x)
 
     def draw_lunge_warning(self, enemy, x):
         tip = enemy.lunge_end + enemy.facing * enemy.LUNGE_BLADE_REACH - self.camera_x

@@ -34,3 +34,19 @@ def stop_at_boxes(x, next_x, feet, half_width, boxes):
         elif next_x < right + half_width <= x:
             next_x = right + half_width
     return next_x
+
+
+def bolt_hit_distance(bolt, reach, left, bottom, right, top):
+    entry, exit = 0.0, reach
+    for position, direction, low, high in (
+        (bolt.x, bolt.dx, left, right), (bolt.y, bolt.dy, bottom, top),
+    ):
+        if not direction:
+            if not low <= position <= high:
+                return None
+            continue
+        near, far = sorted(((low - position) / direction, (high - position) / direction))
+        entry, exit = max(entry, near), min(exit, far)
+        if entry > exit:
+            return None
+    return entry

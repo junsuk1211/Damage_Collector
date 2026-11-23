@@ -308,8 +308,10 @@ class ChapterOne(TrainingCenter):
         self.font.draw(465, height - 30, f'보관 {held}    남은 적 {self.remaining_enemies}    Esc 시작 화면', (153, 227, 245))
         if not self.remaining_enemies:
             if self.NEXT_STAGE:
-                message = '[Z] 강화 선택' if self.can_advance(player) else '클리어 · 오른쪽 출구로 이동'
+                message = '[Z] 강화 선택' if self.can_advance(player) else '오른쪽 출구로 이동'
             else:
-                message = '스테이지 클리어 · [Esc] 시작 화면'
-            fill(width - 325, height - 110, 305, 36, (19, 25, 42))
-            self.font.draw(width - 311, height - 92, message, (255, 230, 177))
+                message = '[Esc] 시작 화면으로'
+            left = width - 325
+            fill(left, height - 142, 305, 68, (19, 25, 42))
+            self.font.draw(left + 14, height - 94, '스테이지 클리어', (255, 230, 177))
+            self.font.draw(left + 14, height - 122, message, (224, 233, 242))
