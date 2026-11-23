@@ -8,14 +8,12 @@ import pico2d as p
 try:
     from .arrowman import Arrowman
     from .chapter1 import ChapterOne
-    from .shieldman import Shieldman
     from .tower_fire import TowerBolt
     from .verysheidman import Verysheidman
     from .selectscreen import fill
 except ImportError:
     from arrowman import Arrowman
     from chapter1 import ChapterOne
-    from shieldman import Shieldman
     from tower_fire import TowerBolt
     from verysheidman import Verysheidman
     from selectscreen import fill
@@ -32,7 +30,6 @@ class ChapterThree(ChapterOne):
     SCAFFOLDS = ()
     FIRE_VENTS = ()
     TOWER_ARCHER_POSITION = (85, 545)
-    TOWER_FIRE_END = 570
     TOWER_AIM_TIME = 1.15
     TOWER_RELOAD_TIME = 3.4
 
@@ -49,7 +46,6 @@ class ChapterThree(ChapterOne):
         self.tower_archer = Arrowman(*self.TOWER_ARCHER_POSITION, facing=1, reload=1.1)
         self.tower_warning = None
         self.tower_bolts = []
-        self.tower_active = True
 
     def update(self, dt, player, previous_attack_time, previous_action_time):
         super().update(dt, player, previous_attack_time, previous_action_time)
@@ -57,28 +53,26 @@ class ChapterThree(ChapterOne):
 
     def update_tower(self, dt, player):
         archer = self.tower_archer
-        if not self.health or player.x >= self.TOWER_FIRE_END or not any(
-            type(enemy) is Shieldman for enemy in self.dummies
-        ):
-            self.tower_active = False
+        if not self.health or not self.remaining_enemies:
             archer.aim = archer.reload = 0
             self.tower_warning = None
             self.tower_bolts.clear()
             return
-        if not self.tower_active:
-            return
 
-        ready_to_fire = archer.advance(dt, player)
-        if archer.aim and self.tower_warning is None:
-            archer.aim = self.TOWER_AIM_TIME
-            self.tower_warning = TowerBolt.aimed_at(
-                archer.x + 37, archer.y + 6, player, self.FLOOR_Y,
-            )
-            archer.facing = -1 if self.tower_warning.dx < 0 else 1
-        if ready_to_fire:
-            self.tower_bolts.append(self.tower_warning)
-            self.tower_warning = None
-            archer.reload = self.TOWER_RELOAD_TIME
+        if self.tower_warning is not None:
+            archer.aim = max(0.0, archer.aim - dt)
+            if not archer.aim:
+                self.tower_bolts.append(self.tower_warning)
+                self.tower_warning = None
+                archer.reload = self.TOWER_RELOAD_TIME
+        else:
+            archer.reload = max(0.0, archer.reload - dt)
+            if not archer.reload:
+                archer.facing = 1 if player.x >= archer.x else -1
+                archer.aim = self.TOWER_AIM_TIME
+                self.tower_warning = TowerBolt.aimed_at(
+                    archer.x + 37 * archer.facing, archer.y + 6, player, self.FLOOR_Y,
+                )
         self.tower_bolts = [bolt for bolt in self.tower_bolts
                             if bolt.advance(dt, player, self.hurt_player)]
 
@@ -160,10 +154,23 @@ class ChapterThree(ChapterOne):
 
     def draw_tower_archer(self):
         archer = self.tower_archer
-        # 조준 자세의 투구와 수평 석궁만 성가퀴 위로 내민다.
+        # 장전 때 난간 뒤로 숙이고, 조준 때만 석궁을 수평으로 내민다.
+        recoil = max(0.0, 1 - (self.TOWER_RELOAD_TIME - archer.reload) / 0.18)
+        if archer.aim or recoil:
+            left, top, width, height = 772, 78, 442, 190
+            offset = 13 - 6 * recoil
+        elif archer.reload > 0.8:
+            left, top, width, height = 1650, 80, 320, 210
+            offset = 1
+        else:
+            left, top, width, height = 300, 60, 190, 180
+            offset = 0
+        scale = 0.17
         self.crossbow_image.clip_composite_draw(
-            772, self.crossbow_image.h - 268, 442, 190, 0, 'h',
-            archer.x - self.camera_x, archer.y + 16, 76, 32,
+            left, self.crossbow_image.h - top - height, width, height,
+            0, 'h' if archer.facing > 0 else '',
+            archer.x + offset * archer.facing - self.camera_x,
+            archer.y + height * scale / 2, width * scale, height * scale,
         )
         if self.tower_warning is not None:
             self.tower_warning.draw_warning(self.camera_x)
