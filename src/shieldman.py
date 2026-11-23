@@ -22,6 +22,13 @@ class ObstacleJump:
 @dataclass
 class Shieldman(Dummy):
     MAX_HP = 12
+    MAX_SPEED = 108.0
+    ATTACK_DISTANCE = 62
+    ATTACK_REACH = 87
+    ATTACK_HIT_TIME = 0.38
+    ATTACK_END = 0.72
+    ATTACK_COOLDOWN = 0.65
+    USE_GUARD_SPRITE = True
     hp: int = MAX_HP
     facing: int = -1
     walk_time: float = 0.0
@@ -70,11 +77,11 @@ class Shieldman(Dummy):
         if self.attack_age is not None:
             before = self.attack_age
             self.attack_age += dt
-            if self.attack_age >= 0.72:
+            if self.attack_age >= self.ATTACK_END:
                 self.attack_age = None
-                self.cooldown = 0.65
+                self.cooldown = self.ATTACK_COOLDOWN
                 return False
-            return before < 0.38 <= self.attack_age
+            return before < self.ATTACK_HIT_TIME <= self.attack_age
         offset = player.x - self.x
         if abs(offset) > 8:
             direction = -1 if offset < 0 else 1
@@ -87,14 +94,14 @@ class Shieldman(Dummy):
                            and player.ground_y >= platform[2]))
         blocked = stop_at_boxes(self.x, player.x, self.y, 0, boxes) != player.x
         different_level = abs(player.ground_y + player.jump_lift - self.y) >= 45
-        if abs(offset) > 62 or blocked or different_level:
-            distance = abs(offset) if blocked else max(0.0, abs(offset) - (24 if different_level else 62))
-            target_speed = min(108.0, 45 + distance * 4)
+        if abs(offset) > self.ATTACK_DISTANCE or blocked or different_level:
+            distance = abs(offset) if blocked else max(0.0, abs(offset) - (24 if different_level else self.ATTACK_DISTANCE))
+            target_speed = min(self.MAX_SPEED, 45 + distance * 4)
             self.speed = min(target_speed, self.speed + 480 * dt)
             next_x = self.x + self.facing * min(self.speed * dt, distance)
             stopped_x = stop_at_boxes(self.x, next_x, self.y, 19, boxes)
             moved = abs(stopped_x - self.x)
-            self.walk_time = self.walk_time + moved / 108 if moved else 0.0
+            self.walk_time = self.walk_time + moved / self.MAX_SPEED if moved else 0.0
             self.x = stopped_x
             if stopped_x != next_x:
                 for left, right, top in boxes:

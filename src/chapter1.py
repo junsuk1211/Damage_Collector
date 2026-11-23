@@ -99,7 +99,7 @@ class ChapterOne(TrainingCenter):
         distance = (player.x - guard.x) * guard.facing
         if (abs(player.ground_y + player.jump_lift - guard.y) < 45
                 and stop_at_boxes(guard.x, player.x, guard.y, 0, self.solid_obstacles) == player.x
-                and -12 <= distance <= 87):
+                and -12 <= distance <= guard.ATTACK_REACH):
             self.hurt_player(player)
 
     def aim_arc(self, player):
@@ -274,7 +274,7 @@ class ChapterOne(TrainingCenter):
     def draw_dummy(self):
         width, height = self.guard_image.w // 4, self.guard_image.h // 2
         for guard in self.dummies:
-            if not isinstance(guard, Shieldman):
+            if not isinstance(guard, Shieldman) or not guard.USE_GUARD_SPRITE:
                 continue
             column, row = guard.sprite_cell()
             left, right = column * width, (column + 1) * width
