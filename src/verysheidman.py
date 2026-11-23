@@ -18,10 +18,45 @@ class Verysheidman(Shieldman):
     ATTACK_HIT_TIME = 0.70
     ATTACK_END = 1.18
     ATTACK_COOLDOWN = 1.0
+    LUNGE_RANGE = 300
+    LUNGE_SPEED = 640
+    LUNGE_WARNING = 0.85
+    LUNGE_BLADE_REACH = 36
+    LUNGE_HEIGHT = 44
     USE_GUARD_SPRITE = False
     hp: int = MAX_HP
     barrier: int = MAX_BARRIER
     stagger: float = 0.0
+    lunge_end: float | None = None
+    lunge_windup: float = 0.0
+    lunge_hit: bool = False
+
+    def prepare_lunge(self, player_x, width):
+        self.facing = 1 if player_x >= self.x else -1
+        self.lunge_end = max(19, min(width - 19, self.x + self.facing * self.LUNGE_RANGE))
+        self.lunge_windup = self.LUNGE_WARNING
+        self.lunge_hit = False
+
+    def advance_lunge(self, dt, player):
+        if self.lunge_windup > 0:
+            self.lunge_windup = max(0.0, self.lunge_windup - dt)
+            return False
+
+        previous_x = self.x
+        self.x += self.facing * min(abs(self.lunge_end - self.x), self.LUNGE_SPEED * dt)
+        if abs(self.lunge_end - self.x) < 0.001:
+            self.x = self.lunge_end
+            self.lunge_end = None
+            self.cooldown = self.ATTACK_COOLDOWN
+
+        feet = player.ground_y + player.jump_lift
+        passed = (player.x - previous_x) * self.facing
+        traveled = abs(self.x - previous_x)
+        if (not self.lunge_hit and abs(feet - self.y) <= self.LUNGE_HEIGHT
+                and -14 <= passed <= traveled + self.LUNGE_BLADE_REACH):
+            self.lunge_hit = True
+            return True
+        return False
 
     def take_number_damage(self, amount):
         self.flash = 0.16
@@ -47,6 +82,8 @@ class Verysheidman(Shieldman):
         return super().advance(dt, player, boxes, floor_y, platforms)
 
     def sprite_cell(self):
+        if self.lunge_end is not None:
+            return (0 if self.lunge_windup else 1), 1
         if self.stagger or self.flash:
             return 3, 1
         if self.attack_age is not None:

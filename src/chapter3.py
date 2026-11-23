@@ -50,6 +50,20 @@ class ChapterThree(ChapterOne):
         else:
             super().dagger_hit(enemy, amount, player)
 
+    def advance_guard(self, guard, dt, player):
+        if guard.lunge_end is not None:
+            if guard.advance_lunge(dt, player):
+                self.hurt_player(player, damage=2)
+            return
+
+        if guard.stagger:
+            guard.advance(dt, player)
+            if not guard.stagger:
+                guard.prepare_lunge(player.x, self.width)
+            return
+
+        super().advance_guard(guard, dt, player)
+
     def draw_dummy(self):
         super().draw_dummy()
         cell_w, cell_h = self.heavy_image.w // 4, self.heavy_image.h // 2
@@ -69,11 +83,26 @@ class ChapterThree(ChapterOne):
                 self.draw_barrier(enemy, x)
             elif enemy.stagger:
                 self.spark_font.draw(x - 32, enemy.y + 112, '방벽 파괴', (133, 242, 255))
+            elif enemy.lunge_end is not None and enemy.lunge_windup:
+                self.draw_lunge_warning(enemy, x)
             if enemy.attack_age is not None and enemy.attack_age < enemy.ATTACK_HIT_TIME:
                 progress = enemy.attack_age / enemy.ATTACK_HIT_TIME
                 left = x if enemy.facing > 0 else x - enemy.ATTACK_REACH
                 fill(left, enemy.y + 1, enemy.ATTACK_REACH, 4, (248, 81, 64))
                 self.spark_font.draw(x - 5, enemy.y + 106, '!', (255, 167 - int(progress * 100), 83))
+
+    def draw_lunge_warning(self, enemy, x):
+        tip = enemy.lunge_end + enemy.facing * enemy.LUNGE_BLADE_REACH - self.camera_x
+        left = int(max(0, min(x, tip)))
+        right = int(min(self.viewport_width, max(x, tip)))
+        y = enemy.y + enemy.LUNGE_HEIGHT
+        red = (255, 105, 105) if enemy.lunge_windup < 0.22 else (255, 65, 75)
+        for start in range(left, right, 22):
+            length = min(13, right - start)
+            fill(start, y - 3, length, 6, (100, 18, 31))
+            fill(start, y - 1, length, 2, red)
+        text_x = max(12, min(x - 72, self.viewport_width - 175))
+        self.spark_font.draw(text_x, enemy.y + 111, '찌르기  ↑ 점프 / Shift 구르기', (255, 116, 116))
 
     def draw_barrier(self, enemy, x):
         edge = x + enemy.facing * 40

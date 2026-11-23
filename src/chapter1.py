@@ -125,20 +125,22 @@ class ChapterOne(TrainingCenter):
             if pillar.hits(player):
                 self.hurt_player(player)
         for guard in self.dummies:
-            if not isinstance(guard, Shieldman):
-                continue
-            if (guard.attack_age is None and guard.obstacle_jump is None
-                    and guard.y == self.FLOOR_Y and abs(player.x - guard.x) > 520):
-                guard.walk_time = 0.0
-                guard.speed = 0.0
-                continue
-            if guard.advance(dt, player, self.solid_obstacles, self.FLOOR_Y, self.platforms):
-                self.try_guard_hit(guard, player)
+            if isinstance(guard, Shieldman):
+                self.advance_guard(guard, dt, player)
 
-    def hurt_player(self, player):
+    def advance_guard(self, guard, dt, player):
+        if (guard.attack_age is None and guard.obstacle_jump is None
+                and guard.y == self.FLOOR_Y and abs(player.x - guard.x) > 520):
+            guard.walk_time = 0.0
+            guard.speed = 0.0
+            return
+        if guard.advance(dt, player, self.solid_obstacles, self.FLOOR_Y, self.platforms):
+            self.try_guard_hit(guard, player)
+
+    def hurt_player(self, player, damage=1):
         rolling = player.ground_action is not None and player.ground_action[0] == 3
         if self.health and not self.hurt_time and not rolling:
-            self.health -= 1
+            self.health = max(0, self.health - damage)
             self.hurt_time = 0.65
             if 'shield' in self.upgrades:
                 self.upgrades.remove('shield')
