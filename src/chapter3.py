@@ -51,7 +51,7 @@ class ChapterThree(ChapterOne):
             super().dagger_hit(enemy, amount, player)
 
     def advance_guard(self, guard, dt, player):
-        if guard.lunge_end is not None:
+        if guard.lunge_end is not None or guard.lunge_recovery:
             if guard.advance_lunge(dt, player):
                 self.hurt_player(player, damage=2)
             return
@@ -74,9 +74,24 @@ class ChapterThree(ChapterOne):
             if not -85 <= x <= self.viewport_width + 85:
                 continue
             column, row = enemy.sprite_cell()
+            offset_x, offset_y, angle = 0, 0, 0
+            if enemy.lunge_windup:
+                progress = 1 - enemy.lunge_windup / enemy.LUNGE_WARNING
+                offset_x = -enemy.facing * (3 + 6 * progress)
+                offset_y = -4 * progress
+                angle = -0.10 * enemy.facing * progress
+            elif enemy.lunge_end is not None:
+                offset_x = 7 * enemy.facing
+                offset_y = -4
+                angle = 0.20 * enemy.facing
+            elif enemy.lunge_recovery:
+                progress = enemy.lunge_recovery / enemy.LUNGE_RECOVERY
+                offset_x = 4 * enemy.facing * progress
+                angle = 0.10 * enemy.facing * progress
             self.heavy_image.clip_composite_draw(
                 column * cell_w, (1 - row) * cell_h, cell_w, cell_h,
-                0, 'h' if enemy.facing > 0 else '', x, enemy.y + 58, 148, 148,
+                angle, 'h' if enemy.facing > 0 else '',
+                x + offset_x, enemy.y + 58 + offset_y, 148, 148,
             )
             self.draw_target_health(enemy, enemy.y + 131)
             if enemy.barrier:
