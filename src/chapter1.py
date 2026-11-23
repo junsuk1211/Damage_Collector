@@ -23,6 +23,7 @@ except ImportError:
 class ChapterOne(TrainingCenter):
     MAX_HEALTH = 5
     FLOOR_Y = 144
+    SCREENS_WIDE = 2
     TITLE = '챕터 1  |  성문 경비병'
     NEXT_STAGE = 'chapter2'
     # 성문 앞의 낮은 석단으로 점프를 익히고, 후반에는 돌기둥 사이의 통로를 건넌다.
@@ -54,7 +55,7 @@ class ChapterOne(TrainingCenter):
         return len(self.dummies)
 
     def __init__(self, width):
-        super().__init__(width * 2)
+        super().__init__(width * self.SCREENS_WIDE)
         self.viewport_width = width
         path = Path(__file__).resolve().parents[1] / 'assets/characters/chapter1-guard.png'
         self.guard_image = p.load_image(str(path))

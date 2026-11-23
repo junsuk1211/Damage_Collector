@@ -17,13 +17,14 @@ except ImportError:
 
 class ChapterThree(ChapterOne):
     TITLE = '챕터 3  |  성 내부 초소'
+    SCREENS_WIDE = 1
     NEXT_STAGE = None
     ARROW_PLATFORM = None
-    GUARD_POSITIONS = (820, 1520)
-    HEAVY_POSITIONS = (1290, 2180)
-    STONE_PLATFORMS = ((530, 630, 181), (1740, 1840, 196))
-    SCAFFOLDS = ((1050, 1250, 211),)
-    FIRE_VENTS = ((960, 1.1), (1910, 2.2))
+    GUARD_POSITIONS = ()
+    HEAVY_POSITIONS = (570, 1060)
+    STONE_PLATFORMS = ()
+    SCAFFOLDS = ()
+    FIRE_VENTS = ()
 
     def __init__(self, width):
         super().__init__(width)
