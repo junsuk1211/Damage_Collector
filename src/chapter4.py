@@ -55,10 +55,23 @@ class ChapterFour(ChapterOne):
         self.chain = []
         self.chain_value = 0
 
-    def dagger_hit(self, enemy, amount, player):
-        if self.phase != 'exposed':
-            amount = 1
-        super().dagger_hit(enemy, amount, player)
+    @property
+    def barrier_active(self):
+        return self.phase != 'exposed'
+
+    def damage(self, enemy, amount):
+        if enemy is self.archer and self.barrier_active:
+            enemy.flash = 0.16
+            return
+        super().damage(enemy, amount)
+
+    def draw_archer_barrier(self, enemy, x):
+        color = (178, 250, 255) if enemy.flash else (71, 174, 194)
+        for dx, dy, direction in ((-48, 10, 1), (48, 10, -1),
+                                  (-48, 100, 1), (48, 100, -1)):
+            fill(x + min(dx, dx + direction * 12), enemy.y + dy, 12, 2, color)
+            fill(x + dx, enemy.y + dy - (10 if dy == 100 else 0), 2, 12, color)
+        self.spark_font.draw(x - 26, enemy.y + 109, '방벽 활성', color)
 
     def explode(self, x, y, value, *, hit_environment=False):
         near = [anchor for anchor in self.anchors
@@ -118,8 +131,8 @@ class ChapterFour(ChapterOne):
                 self.time_left = self.CHAIN_INTERVAL
             else:
                 self.bursts.append(Burst(enemy.x, enemy.y + 56, self.chain_value))
-                self.damage(enemy, self.chain_value)
                 self.phase, self.time_left = 'exposed', 3.0
+                self.damage(enemy, self.chain_value)
             if self.audio is not None:
                 self.audio.play_effect('burst')
         else:
@@ -134,7 +147,7 @@ class ChapterFour(ChapterOne):
         super().draw_banner(width, height, player)
         if self.archer.hp:
             fill(16, height - 105, 416, 30, (19, 25, 42))
-            self.spark_font.draw(26, height - 90, '바닥에 박힌 화살에 숫자를 던져 갑옷을 열어.', (152, 242, 255))
+            self.spark_font.draw(26, height - 90, '박힌 화살에 숫자를 던져 방벽을 깨세요.', (152, 242, 255))
 
     def draw_dummy(self):
         image = self.crossbow_image
@@ -144,7 +157,9 @@ class ChapterFour(ChapterOne):
                                  enemy.y + 68, round(146 * image.w / image.h), 146)
             self.draw_target_health(enemy, enemy.y + 150)
             if self.phase == 'exposed':
-                self.spark_font.draw(x - 32, enemy.y + 132, '갑옷 열림', (135, 240, 255))
+                self.spark_font.draw(x - 32, enemy.y + 132, '방벽 파괴', (135, 240, 255))
+            else:
+                self.draw_archer_barrier(enemy, x)
         if self.warning is not None:
             self.warning.draw_warning(self.camera_x)
         for bolt in self.bolts:
