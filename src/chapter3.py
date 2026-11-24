@@ -302,7 +302,7 @@ class ChapterThree(ChapterOne):
         for y in range(10, 102, 8):
             curve = 8 * sin((y - 10) / 92 * 3.14159)
             fill(edge + enemy.facing * curve - 2, enemy.y + y, 4, 6, color)
-        fill(x - 44, enemy.y + 106, 88, 21, (17, 34, 51))
-        fill(x - 42, enemy.y + 108, 84 * enemy.barrier / enemy.MAX_BARRIER, 3, color)
-        self.spark_font.draw(x - 37, enemy.y + 117,
+        fill(x - 44, enemy.y + 158, 88, 21, (17, 34, 51))
+        fill(x - 42, enemy.y + 160, 84 * enemy.barrier / enemy.MAX_BARRIER, 3, color)
+        self.spark_font.draw(x - 37, enemy.y + 169,
                              f'방벽 {enemy.barrier}/{enemy.MAX_BARRIER}', color)
