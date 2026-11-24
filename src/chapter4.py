@@ -6,11 +6,13 @@ from pathlib import Path
 import pico2d as p
 
 try:
+    from .arrowrain import ArrowRain
     from .chapter1 import ChapterOne
     from .selectscreen import fill
     from .tower_fire import TowerBolt
     from .trainingcenter import Burst, Dummy
 except ImportError:
+    from arrowrain import ArrowRain
     from chapter1 import ChapterOne
     from selectscreen import fill
     from tower_fire import TowerBolt
@@ -25,6 +27,10 @@ class HeavyBolt(TowerBolt):
     SPEED = 460
 
 
+class CrossbowRain(ArrowRain):
+    WARNING = 0.85
+
+
 class ChapterFour(ChapterOne):
     TITLE = '챕터 4  |  성 내부 초소'
     SCREENS_WIDE = 1
@@ -36,6 +42,11 @@ class ChapterFour(ChapterOne):
     FIRE_VENTS = ()
     CHAIN_INTERVAL = 0.24
     ANCHOR_FLIGHT_TIME = 0.48
+    ANCHOR_FIRST_FUSE = 3.4
+    ANCHOR_SECOND_FUSE = 5.6
+    ANCHOR_WARNING = 0.85
+    SHOCK_RADIUS = 58
+    RAIN_HALF_WIDTH = 90
 
     def __init__(self, width):
         super().__init__(width)
@@ -52,6 +63,9 @@ class ChapterFour(ChapterOne):
         self.warning = None
         self.bolts = []
         self.anchors = []
+        self.anchor_age = 0.0
+        self.shocks = []
+        self.rain = None
         self.chain = []
         self.chain_value = 0
 
@@ -92,8 +106,15 @@ class ChapterFour(ChapterOne):
             self.warning = None
             self.bolts.clear()
             self.anchors.clear()
+            self.shocks.clear()
+            self.rain = None
             return
 
+        self.shocks = [(x, age + dt) for x, age in self.shocks if age + dt < 0.35]
+        if self.rain is not None and self.rain.update(dt, player):
+            self.hurt_player(player)
+        if self.phase == 'armed':
+            self.advance_anchors(dt, player)
         self.time_left -= dt
         if self.time_left <= 0:
             self.advance_attack(player)
@@ -114,7 +135,19 @@ class ChapterFour(ChapterOne):
             self.phase, self.time_left = 'before_skill', 1.1
         elif self.phase == 'before_skill':
             self.facing = 1 if player.x >= enemy.x else -1
-            self.anchors = [enemy.x + self.facing * distance for distance in (150, 310)]
+            self.phase, self.time_left = 'rain_aim', 0.5
+            self.play_draw_sound()
+        elif self.phase == 'rain_aim':
+            radius = self.RAIN_HALF_WIDTH
+            center = max(radius, min(self.width - radius, player.x))
+            self.rain = CrossbowRain((center - radius, center + radius, self.FLOOR_Y), airborne=True)
+            self.phase, self.time_left = 'rain', 2.5
+        elif self.phase == 'rain':
+            self.rain = None
+            target = max(self.SHOCK_RADIUS, min(self.width - self.SHOCK_RADIUS, player.x))
+            self.facing = 1 if target >= enemy.x else -1
+            other = target + (150 if target < self.width / 2 else -150)
+            self.anchors = [target, other]
             self.phase, self.time_left = 'aimed_anchors', 1.05
             self.play_draw_sound()
         elif self.phase == 'aimed_anchors':
@@ -123,7 +156,8 @@ class ChapterFour(ChapterOne):
             feet = player.ground_y + player.jump_lift
             if feet <= self.FLOOR_Y + 40 and any(abs(player.x - x) <= 35 for x in self.anchors):
                 self.hurt_player(player)
-            self.phase, self.time_left = 'armed', 8.0
+            self.anchor_age = 0.0
+            self.phase, self.time_left = 'armed', self.ANCHOR_SECOND_FUSE + 0.45
         elif self.phase == 'chain':
             if self.chain:
                 x = self.chain.pop(0)
@@ -138,6 +172,38 @@ class ChapterFour(ChapterOne):
         else:
             self.anchors.clear()
             self.phase, self.time_left = 'ready', 1.2
+
+    def advance_anchors(self, dt, player):
+        self.anchor_age += dt
+        while self.anchors:
+            fuse = self.ANCHOR_FIRST_FUSE if len(self.anchors) == 2 else self.ANCHOR_SECOND_FUSE
+            if self.anchor_age < fuse:
+                return
+            x = self.anchors.pop(0)
+            self.shocks.append((x, 0.0))
+            feet = player.ground_y + player.jump_lift
+            if abs(player.x - x) <= self.SHOCK_RADIUS and feet <= self.FLOOR_Y + 30:
+                self.hurt_player(player)
+            if self.audio is not None:
+                self.audio.play_effect('burst')
+
+    def draw_skill_effects(self):
+        if self.phase == 'rain_aim' or (self.rain is not None and self.rain.elapsed < 0.22):
+            x = self.archer.x + self.facing * 25
+            y = self.archer.y + 105
+            if self.rain is None:
+                fill(x - self.camera_x - 3, y, 6, 12, (245, 162, 90))
+            else:
+                HeavyBolt(x, y + self.rain.elapsed * 1600, 0, 1, 0).draw(self.camera_x)
+        if self.rain is not None:
+            self.rain.draw(self.camera_x)
+        for x, age in self.shocks:
+            radius = round(self.SHOCK_RADIUS * min(1, age / 0.14))
+            color = (255, round(210 - age * 370), 70)
+            fill(x - self.camera_x - radius, self.FLOOR_Y + 2, 2 * radius, 4, color)
+            for direction in (-1, 1):
+                tip = x - self.camera_x + direction * radius
+                fill(tip - 2, self.FLOOR_Y + 4, 4, 26 * (1 - age / 0.35), color)
 
     def play_draw_sound(self):
         if self.audio is not None:
@@ -166,6 +232,7 @@ class ChapterFour(ChapterOne):
             bolt.draw(self.camera_x)
         for x in self.anchors:
             self.draw_anchor(x)
+        self.draw_skill_effects()
 
     def draw_anchor(self, x):
         y = self.FLOOR_Y
@@ -182,6 +249,12 @@ class ChapterFour(ChapterOne):
                 HeavyBolt(start_x + dx * progress, y + 50 + dy * progress,
                           dx / length, dy / length, 0).draw(self.camera_x)
         elif self.phase == 'armed':
-            fill(screen_x - 22, y + 1, 44, 4, (64, 198, 207))
+            fuse = self.ANCHOR_FIRST_FUSE if len(self.anchors) == 2 and x == self.anchors[0] else self.ANCHOR_SECOND_FUSE
+            remaining = max(0.0, fuse - self.anchor_age)
+            warning = remaining <= self.ANCHOR_WARNING
+            color = (255, 83, 68) if warning else (64, 198, 207)
+            radius = self.SHOCK_RADIUS if warning else 22
+            fill(screen_x - radius, y + 1, 2 * radius, 4, color)
             HeavyBolt(x, y + 2, 0, -1, 0).draw(self.camera_x)
-            self.spark_font.draw(screen_x - 27, y + 37, '숫자 투척', (152, 242, 255))
+            label = f'{remaining:.1f}초' if warning else '숫자 투척'
+            self.spark_font.draw(screen_x - 27, y + 37, label, color)

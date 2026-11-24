@@ -12,10 +12,11 @@ class ArrowRain:
     DROP_HEIGHT = 360
     WAVE_INTERVAL = 0.23
 
-    def __init__(self, platform):
+    def __init__(self, platform, *, airborne=False):
         self.left, self.right, self.top = platform
         self.center = (self.left + self.right) / 2
-        self.elapsed = None
+        self.airborne = airborne
+        self.elapsed = 0.0 if airborne else None
         self.spent = False
         self.arrows = tuple(
             (self.left + 12 + (self.right - self.left - 24) * (lane + offset) / 7,
@@ -57,21 +58,22 @@ class ArrowRain:
         return max(self.top, self.top + self.DROP_HEIGHT - age * self.SPEED)
 
     def draw(self, camera_x):
-        center = self.center - camera_x
         y = self.top
-        plate = (85, 57, 64) if self.spent else (172, 48, 52)
-        marking = (137, 107, 111) if self.spent else (255, 80, 71)
-        fill(center - 21, y - 9, 42, 9, (41, 22, 33))
-        fill(center - 19, y - 7, 38, 7, plate)
-        fill(center - 19, y - 2, 38, 2, marking)
-        fill(center - 7, y + 9, 14, 26, (41, 22, 33))
-        fill(center - 7, y - 2, 14, 11, (41, 22, 33))
-        fill(center - 5, y + 11, 10, 22, marking)
-        fill(center - 5, y, 10, 7, marking)
+        if not self.airborne:
+            center = self.center - camera_x
+            plate = (85, 57, 64) if self.spent else (172, 48, 52)
+            marking = (137, 107, 111) if self.spent else (255, 80, 71)
+            fill(center - 21, y - 9, 42, 9, (41, 22, 33))
+            fill(center - 19, y - 7, 38, 7, plate)
+            fill(center - 19, y - 2, 38, 2, marking)
+            fill(center - 7, y + 9, 14, 26, (41, 22, 33))
+            fill(center - 7, y - 2, 14, 11, (41, 22, 33))
+            fill(center - 5, y + 11, 10, 22, marking)
+            fill(center - 5, y, 10, 7, marking)
         if self.elapsed is None or self.spent:
             return
-        if self.elapsed < self.WARNING:
-            for x in range(self.left + 4, self.right - 4, 14):
+        if self.elapsed < self.WARNING or (self.airborne and not self.spent):
+            for x in range(int(self.left) + 4, int(self.right) - 4, 14):
                 fill(x - camera_x, y + 2, 7, 2, (245, 85, 70))
         for x, delay in self.arrows:
             start = self.WARNING + delay
