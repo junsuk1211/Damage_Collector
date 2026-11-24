@@ -1,5 +1,6 @@
 """시작 메뉴와 공용 화면 요소."""
 
+from sdl2 import SDL_BLENDMODE_BLEND, SDL_GetRenderDrawBlendMode, SDL_SetRenderDrawBlendMode
 import ctypes
 import os
 from collections import OrderedDict
@@ -15,6 +16,17 @@ def fill(x, y, width, height, color):
     rect = SDL_Rect(int(x), int(canvas.get_canvas_height() - y - height), int(width), int(height))
     SDL_SetRenderDrawColor(canvas.renderer, *color, 255)
     SDL_RenderFillRect(canvas.renderer, ctypes.byref(rect))
+
+
+def fade_to_black(opacity):
+    if opacity <= 0:
+        return
+    previous = ctypes.c_int()
+    SDL_GetRenderDrawBlendMode(canvas.renderer, ctypes.byref(previous))
+    SDL_SetRenderDrawBlendMode(canvas.renderer, SDL_BLENDMODE_BLEND)
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, round(255 * min(1, opacity)))
+    SDL_RenderFillRect(canvas.renderer, None)
+    SDL_SetRenderDrawBlendMode(canvas.renderer, previous.value)
 
 
 class CachedFont:
@@ -65,6 +77,7 @@ class SelectScreen:
         self.cover = p.load_image(str(cover_path))
         self.title_font = korean_font(46)
         self.font = korean_font(26)
+        self.subtitle = korean_font(18)
 
     def handle_event(self, event):
         if event.type == p.SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:

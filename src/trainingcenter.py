@@ -296,13 +296,16 @@ class TrainingCenter:
             x, y = shot.arc.point(progress)
             for dummy in self.dummies:
                 if dummy.hp > 0 and abs(x - dummy.x) <= 22 and dummy.y + 8 <= y <= dummy.y + 88:
-                    self.explode(x, y, shot.value)
+                    self.on_direct_hit(dummy, x, y, shot.value)
                     return False
         shot.progress = end
         if end == 1.0:
             self.explode(*shot.arc.point(end), shot.value)
             return False
         return True
+
+    def on_direct_hit(self, dummy, x, y, value):
+        self.explode(x, y, value)
 
     def explode(self, x, y, value, *, hit_environment=False):
         self.bursts.append(Burst(x, y, value))

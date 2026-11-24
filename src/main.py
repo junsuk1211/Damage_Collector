@@ -29,6 +29,8 @@ try:
     from .chapter2 import ChapterTwo
     from .chapter3 import ChapterThree
     from .chapter4 import ChapterFour
+    from .chapter5 import ChapterFive
+    from .ending import EndingScreen
     from .gameover import GameOverScreen
     from .upgrades import UpgradeScreen
     from .game_audio import GameAudio
@@ -41,6 +43,8 @@ except ImportError:
     from chapter2 import ChapterTwo
     from chapter3 import ChapterThree
     from chapter4 import ChapterFour
+    from chapter5 import ChapterFive
+    from ending import EndingScreen
     from gameover import GameOverScreen
     from upgrades import UpgradeScreen
     from game_audio import GameAudio
@@ -62,6 +66,7 @@ def main(frame_limit=None):
             'chapter1': pico2d.load_image(str(ROOT / 'assets/backgrounds/training-yard.png')),
             'chapter2': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-corridor.png')),
             'chapter3': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-rampart.png')),
+            'chapter5': pico2d.load_image(str(ROOT / 'assets/backgrounds/cathedral-nave.png')),
             'chapter4': pico2d.load_image(str(ROOT / 'assets/backgrounds/castle-checkpoint.png')),
         }
         mountains = pico2d.load_image(str(ROOT / 'assets/backgrounds/mountain-training.png'))
@@ -70,10 +75,11 @@ def main(frame_limit=None):
         player.load_image()
         menu = SelectScreen(WIDTH, HEIGHT)
         game_over = GameOverScreen(WIDTH, HEIGHT)
-        menus = {'menu': menu, 'gameover': game_over}
+        menus = {'menu': menu, 'gameover': game_over, 'ending': EndingScreen(WIDTH, HEIGHT)}
         training = TrainingCenter(WIDTH)
         stages = {'chapter1': ChapterOne(WIDTH), 'chapter2': ChapterTwo(WIDTH),
-                  'chapter3': ChapterThree(WIDTH), 'chapter4': ChapterFour(WIDTH)}
+                  'chapter3': ChapterThree(WIDTH), 'chapter4': ChapterFour(WIDTH),
+                  'chapter5': ChapterFive(WIDTH)}
         rooms = {'training': training, **stages}
         audio = GameAudio()
         for room in rooms.values():
@@ -151,6 +157,12 @@ def main(frame_limit=None):
                 if screen in stages and not room.health:
                     retry_stage = screen
                     screen = 'gameover'
+                elif screen == 'chapter5' and room.victory:
+                    player.clear_input()
+                    menus['ending'].elapsed = 0.0
+                    screen = 'ending'
+            elif screen == 'ending':
+                menus['ending'].elapsed += dt
             audio.play_screen(screen)
             pico2d.clear_canvas()
             if screen in menus:

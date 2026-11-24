@@ -18,6 +18,7 @@ class GameAudio:
         for name in ('menu', 'chapter1', 'chapter2', 'chapter3', 'upgrades', 'instructions', 'training'):
             self.tracks[name] = p.load_music(str(folder / f'{name}.ogg'))
         volumes = {
+            'cathedral_bell': 68,
             'hit': 64, 'hurt': 80, 'burst': 70, 'burst_miss': 44,
             'jump': 48, 'roll': 52, 'pickup': 58,
             'card_move': 43, 'card_confirm': 60,
@@ -30,7 +31,7 @@ class GameAudio:
             self.effects[name] = effect
 
     def play_screen(self, screen):
-        track = self.tracks.get(screen)
+        track = self.tracks.get({'chapter5': 'chapter3', 'ending': 'menu'}.get(screen, screen))
         if track is self.current_track:
             return
         if self.current_track is not None:

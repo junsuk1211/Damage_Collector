@@ -34,7 +34,7 @@ class CrossbowRain(ArrowRain):
 class ChapterFour(ChapterOne):
     TITLE = '챕터 4  |  성 내부 초소'
     SCREENS_WIDE = 1
-    NEXT_STAGE = None
+    NEXT_STAGE = 'chapter5'
     GUARD_POSITIONS = ()
     STONE_PLATFORMS = ()
     ARROW_PLATFORM = None
